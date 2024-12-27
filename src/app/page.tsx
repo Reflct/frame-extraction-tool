@@ -18,6 +18,7 @@ import { BarChart, Bar, YAxis, XAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { ClearCacheDialog } from '@/components/ui/clear-cache-dialog';
 import Image from 'next/image';
 import { clsx } from 'clsx';
+import { Loader2 } from "lucide-react";
 
 interface ProgressInfo {
   current: number;
@@ -470,7 +471,36 @@ export default function ExtractPage() {
                   )}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
+                  onClick={() => {
+                    if (!state.videoFile && !state.processing) {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'video/*';
+                      input.onchange = (e: Event) => {
+                        const target = e.target as HTMLInputElement;
+                        if (target.files?.[0]) {
+                          handleFileSelect({ target } as React.ChangeEvent<HTMLInputElement>);
+                        }
+                      };
+                      input.click();
+                    }
+                  }}
                 >
+                  {state.loadingMetadata && (
+                    <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-sm text-muted-foreground">Loading video metadata...</p>
+                      </div>
+                    </div>
+                  )}
+                  {state.error && (
+                    <Alert variant="destructive" className="mb-4">
+                      <AlertDescription>
+                        {state.error}
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   {state.videoFile ? (
                     <div className="space-y-6">
                       <h2 className="text-xl font-semibold text-left">{state.videoFile.name}</h2>
