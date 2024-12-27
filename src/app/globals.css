@@ -2,20 +2,101 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer utilities {
+  .text-edge-cap {
+    text-edge: cap;
+    leading-trim: both;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+@font-face {
+  font-family: 'Roobert';
+  src: url('/Roobert-Medium.woff2') format('woff2'),
+       url('/Roobert-Medium.woff') format('woff');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Roobert';
+  src: url('/Roobert-Bold.woff2') format('woff2'),
+       url('/Roobert-Bold.woff') format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 3% 7%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 3% 7%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 3% 7%;
+
+    --primary: 220 3% 7%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 82%;
+    --secondary-foreground: 220 3% 7%;
+
+    --muted: 220 14% 82%;
+    --muted-foreground: 220 14% 82%;
+
+    --accent: 220 14% 82%;
+    --accent-foreground: 220 3% 7%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 14% 82%;
+    --input: 220 14% 82%;
+    --ring: 220 3% 7%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 220 3% 7%;
+    --foreground: 0 0% 100%;
+
+    --card: 220 3% 7%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 220 3% 7%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 0 0% 100%;
+    --primary-foreground: 220 3% 7%;
+
+    --secondary: 220 14% 82%;
+    --secondary-foreground: 220 3% 7%;
+
+    --muted: 220 14% 82%;
+    --muted-foreground: 220 14% 82%;
+
+    --accent: 220 14% 82%;
+    --accent-foreground: 220 3% 7%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 14% 82%;
+    --input: 220 14% 82%;
+    --ring: 220 14% 82%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Roobert', system-ui, sans-serif;
+  }
 }
