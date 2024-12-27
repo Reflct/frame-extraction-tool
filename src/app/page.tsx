@@ -718,7 +718,29 @@ export default function ExtractPage() {
                         <BarChart data={getChartData(state)}>
                           <YAxis />
                           <XAxis label={{ value: 'Frames', position: 'insideBottomRight', offset: -10 }} hide />
-                          <Tooltip />
+                          <Tooltip content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const frame = state.frames.find(f => f.fileName.replace(/^frame_(\d+)\..*$/, '$1') === payload[0].payload.name);
+                              return (
+                                <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
+                                  {frame && (
+                                    <div className="mb-2">
+                                      <Image
+                                        src={URL.createObjectURL(frame.blob)}
+                                        alt={`Frame ${payload[0].payload.name}`}
+                                        width={160}
+                                        height={90}
+                                        className="rounded"
+                                      />
+                                    </div>
+                                  )}
+                                  <p className="text-sm">Frame: {payload[0].payload.name}</p>
+                                  <p className="text-sm">Blur Score: {payload[0].value}</p>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }} />
                           <Bar dataKey="blurScore">
                             {getChartData(state).map((entry) => (
                               <Cell 
