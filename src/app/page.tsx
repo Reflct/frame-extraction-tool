@@ -164,6 +164,13 @@ export default function ExtractPage() {
     pendingFile: null
   });
 
+  const [fileInput] = useState(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'video/*';
+    return input;
+  });
+
   const processNewFile = useCallback(async (file: File) => {
     const thumbnailUrl = URL.createObjectURL(file);
     setState(prev => ({
@@ -190,9 +197,14 @@ export default function ExtractPage() {
     }
   }, []);
 
-  const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
+  const openFileSelector = useCallback(() => {
+    if (state.loadingMetadata || state.processing || state.showClearCacheDialog) return;
+    
+    fileInput.onchange = async (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (!file) return;
+      
       if (state.frames.length > 0) {
         setState(prev => ({
           ...prev,
@@ -202,8 +214,11 @@ export default function ExtractPage() {
       } else {
         await processNewFile(file);
       }
-    }
-  }, [state.frames.length, processNewFile]);
+      // Clear the input value so the same file can be selected again
+      target.value = '';
+    };
+    fileInput.click();
+  }, [state.loadingMetadata, state.processing, state.showClearCacheDialog, state.frames.length, processNewFile]);
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -213,6 +228,8 @@ export default function ExtractPage() {
   const handleDrop = useCallback(async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
+    
+    if (state.loadingMetadata) return;
     
     const file = event.dataTransfer.files[0];
     if (file) {
@@ -226,11 +243,12 @@ export default function ExtractPage() {
         await processNewFile(file);
       }
     }
-  }, [state.frames.length, processNewFile]);
+  }, [state.frames.length, processNewFile, state.loadingMetadata]);
 
   const handleClearCache = useCallback(async () => {
     try {
       await frameStorage.clear();
+      const pendingFile = state.pendingFile;
       setState(prev => ({
         ...prev,
         frames: [],
@@ -246,18 +264,9 @@ export default function ExtractPage() {
         blurProgress: { current: 0, total: 0 }
       }));
 
-      // Only open file explorer if we have a pending file (replacing video)
-      if (state.pendingFile) {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'video/*';
-        input.onchange = async (e) => {
-          const file = (e.target as HTMLInputElement).files?.[0];
-          if (file) {
-            await processNewFile(file);
-          }
-        };
-        input.click();
+      // Process the pending file directly instead of opening a new file dialog
+      if (pendingFile) {
+        await processNewFile(pendingFile);
       }
     } catch {
       setState(prev => ({
@@ -464,35 +473,28 @@ export default function ExtractPage() {
             {/* Upload Card */}
             <Card className="rounded-[14px] border border-[#E0E0E0] bg-white">
               <div className="m-4">
-                <div
+                <div 
                   className={clsx(
-                    "flex flex-col items-center justify-center rounded-lg",
-                    !state.videoFile ? "border-2 border-dashed border-gray-200 p-8" : ""
+                    "relative w-full min-h-[200px] rounded-lg border-2 border-dashed",
+                    "flex flex-col items-center justify-center p-6",
+                    (!state.videoFile && !state.processing && !state.loadingMetadata) ? "cursor-pointer" : "cursor-default",
+                    state.videoFile ? "border-none" : "border-muted-foreground"
                   )}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
                   onClick={() => {
-                    if (!state.videoFile && !state.processing) {
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.accept = 'video/*';
-                      input.onchange = (e: Event) => {
-                        const target = e.target as HTMLInputElement;
-                        if (target.files?.[0]) {
-                          handleFileSelect({ target } as React.ChangeEvent<HTMLInputElement>);
-                        }
-                      };
-                      input.click();
+                    if (!state.videoFile && !state.processing && !state.loadingMetadata) {
+                      openFileSelector();
                     }
                   }}
                 >
                   {state.loadingMetadata && (
                     <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-2">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        <p className="text-sm text-muted-foreground">Loading video metadata...</p>
-                      </div>
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <p className="text-sm text-muted-foreground">Loading video metadata...</p>
                     </div>
+                  </div>
                   )}
                   {state.error && (
                     <Alert variant="destructive" className="mb-4">
@@ -557,13 +559,12 @@ export default function ExtractPage() {
                       <input
                         type="file"
                         accept="video/*"
-                        onChange={handleFileSelect}
                         className="hidden"
                         id="video-upload"
                       />
                       <Button 
                         variant="outline" 
-                        onClick={() => document.getElementById('video-upload')?.click()}
+                        onClick={openFileSelector}
                         className="mt-4"
                       >
                         Select Video
