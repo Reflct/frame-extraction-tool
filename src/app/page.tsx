@@ -18,7 +18,7 @@ import { BarChart, Bar, YAxis, XAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { ClearCacheDialog } from '@/components/ui/clear-cache-dialog';
 import Image from 'next/image';
 import { clsx } from 'clsx';
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react"
 
 interface ProgressInfo {
   current: number;
