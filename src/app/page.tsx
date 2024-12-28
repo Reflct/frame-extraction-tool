@@ -478,7 +478,7 @@ export default function ExtractPage() {
               inspired by <a href="https://github.com/SharkWipf/nerf_dataset_preprocessing_helper" target="_blank" rel="noopener noreferrer" className="text-[#3190ff]">SharkWipf.</a>
             </p>
             <p className="text-lg text-gray-700 mt-4">All processing happens in your browser, <span className="font-bold">we will never see or store your data.</span></p>
-            <p className="text-lg text-gray-700 mt-4">This tool is a work in progress.</p>
+            <p className="text-lg text-gray-700 mt-4">Uploads are limited to 1.9GB due to browser memory limitations. Larger files will need to be chunked, or just use FFMPEG to extract the frames and run them through SharkWipf's tool.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-7">
@@ -508,16 +508,9 @@ export default function ExtractPage() {
                     </div>
                   </div>
                   )}
-                  {state.error && (
-                    <Alert variant="destructive" className="mb-4">
-                      <AlertDescription>
-                        {state.error}
-                      </AlertDescription>
-                    </Alert>
-                  )}
                   {state.videoFile ? (
                     <div className="space-y-6">
-                      <h2 className="text-xl font-semibold text-left">{state.videoFile.name}</h2>
+                      <h2 className="text-xl font-semibold">{state.videoFile.name}</h2>
                       {/* Video and Metadata */}
                       <div className="flex gap-12">
                         {/* Video Thumbnail and Replace Button */}
@@ -569,7 +562,7 @@ export default function ExtractPage() {
                   ) : (
                     <div>
                       <p>Drag and drop your video here, or click to select</p>
-                      <div className="mt-4 flex flex-col items-center">
+                      <div className="mt-4 flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
                         <Button
                           variant="secondary"
                           onClick={() => openFileSelector()}
