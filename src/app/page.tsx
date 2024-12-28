@@ -164,13 +164,6 @@ export default function ExtractPage() {
     pendingFile: null
   });
 
-  const [fileInput] = useState(() => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'video/*';
-    return input;
-  });
-
   const processNewFile = useCallback(async (file: File) => {
     const thumbnailUrl = URL.createObjectURL(file);
     setState(prev => ({
@@ -200,7 +193,10 @@ export default function ExtractPage() {
   const openFileSelector = useCallback(() => {
     if (state.loadingMetadata || state.processing || state.showClearCacheDialog) return;
     
-    fileInput.onchange = async (e: Event) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'video/*';
+    input.onchange = async (e: Event) => {
       const target = e.target as HTMLInputElement;
       const file = target.files?.[0];
       if (!file) return;
@@ -217,7 +213,7 @@ export default function ExtractPage() {
       // Clear the input value so the same file can be selected again
       target.value = '';
     };
-    fileInput.click();
+    input.click();
   }, [state.loadingMetadata, state.processing, state.showClearCacheDialog, state.frames.length, processNewFile]);
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -247,26 +243,42 @@ export default function ExtractPage() {
 
   const handleClearCache = useCallback(async () => {
     try {
-      await frameStorage.clear();
       const pendingFile = state.pendingFile;
-      setState(prev => ({
-        ...prev,
-        frames: [],
-        showClearCacheDialog: false,
-        pendingFile: null,
-        error: null,
-        videoFile: null,
-        videoMetadata: null,
-        videoThumbnailUrl: null,
-        processing: false,
-        loadingMetadata: false,
-        extractionProgress: { current: 0, total: 0 },
-        blurProgress: { current: 0, total: 0 }
-      }));
-
-      // Process the pending file directly instead of opening a new file dialog
+      await frameStorage.clear();
+      
       if (pendingFile) {
+        // If we have a pending file, process it after clearing cache
+        setState(prev => ({
+          ...prev,
+          frames: [],
+          showClearCacheDialog: false,
+          pendingFile: null,
+          error: null,
+          videoFile: null,
+          videoMetadata: null,
+          videoThumbnailUrl: null,
+          processing: false,
+          loadingMetadata: false,
+          extractionProgress: { current: 0, total: 0 },
+          blurProgress: { current: 0, total: 0 }
+        }));
         await processNewFile(pendingFile);
+      } else {
+        // Just clear the state without automatically opening file selector
+        setState(prev => ({
+          ...prev,
+          frames: [],
+          showClearCacheDialog: false,
+          pendingFile: null,
+          error: null,
+          videoFile: null,
+          videoMetadata: null,
+          videoThumbnailUrl: null,
+          processing: false,
+          loadingMetadata: false,
+          extractionProgress: { current: 0, total: 0 },
+          blurProgress: { current: 0, total: 0 }
+        }));
       }
     } catch {
       setState(prev => ({
@@ -475,14 +487,14 @@ export default function ExtractPage() {
               <div className="m-4">
                 <div 
                   className={clsx(
-                    "relative w-full min-h-[200px] rounded-lg border-2 border-dashed",
-                    "flex flex-col items-center justify-center p-6",
-                    (!state.videoFile && !state.processing && !state.loadingMetadata) ? "cursor-pointer" : "cursor-default",
-                    state.videoFile ? "border-none" : "border-muted-foreground"
+                    "relative w-full h-[300px] border-2 border-dashed rounded-lg flex items-center justify-center text-center p-4",
+                    "hover:bg-gray-50 transition-colors duration-200",
+                    "cursor-pointer"
                   )}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
                     if (!state.videoFile && !state.processing && !state.loadingMetadata) {
                       openFileSelector();
                     }
@@ -520,7 +532,8 @@ export default function ExtractPage() {
                           <Button 
                             variant="secondary"
                             onClick={() => {
-                              setState(prev => ({ ...prev, showClearCacheDialog: true }));
+                              if (state.loadingMetadata || state.processing) return;
+                              openFileSelector();
                             }}
                           >
                             Replace Video
@@ -556,19 +569,19 @@ export default function ExtractPage() {
                   ) : (
                     <div>
                       <p>Drag and drop your video here, or click to select</p>
-                      <input
-                        type="file"
-                        accept="video/*"
-                        className="hidden"
-                        id="video-upload"
-                      />
-                      <Button 
-                        variant="outline" 
-                        onClick={openFileSelector}
-                        className="mt-4"
-                      >
-                        Select Video
-                      </Button>
+                      <div className="mt-4 flex flex-col items-center">
+                        <Button
+                          variant="secondary"
+                          onClick={() => openFileSelector()}
+                          disabled={state.processing}
+                          className="w-40"
+                        >
+                          Select Video
+                        </Button>
+                        <p className="mt-3 text-sm" style={{ color: '#11121452' }}>
+                          Maximum file size: 1.9GB. Supported formats: MP4, MOV, AVI, MKV
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>

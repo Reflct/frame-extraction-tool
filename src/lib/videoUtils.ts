@@ -12,29 +12,64 @@ export interface VideoMetadata {
   codec: string;
 }
 
+// Maximum file size (1.9GB in bytes)
+const MAX_FILE_SIZE = 1.9 * 1024 * 1024 * 1024;
+
 export async function getVideoMetadata(file: File): Promise<VideoMetadata> {
+  // Check file size first
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`Video file is too large (${(file.size / (1024 * 1024 * 1024)).toFixed(1)}GB). Maximum supported size is 1.9GB.`);
+  }
+
   try {
-    // First get the video fps using ffmpeg
+    // Get metadata using ffmpeg
     const ffmpeg = await getFfmpeg();
     const inputFileName = 'input' + file.name.substring(file.name.lastIndexOf('.'));
-    await ffmpeg.writeFile(inputFileName, await fetchFile(file));
+    
+    // Use a stream-based approach for reading the file
+    console.log('Reading video file...');
+    try {
+      const fileData = await fetchFile(file);
+      await ffmpeg.writeFile(inputFileName, fileData);
+    } catch (error) {
+      console.error('Failed to read video file:', error);
+      throw new Error('Could not read video file. The file may be too large or corrupted.');
+    }
 
-    // Get frame rate using FFmpeg stream info
+    // Get stream information
     let streamInfo = '';
     ffmpeg.on('log', ({ message }) => {
       streamInfo += message + '\n';
+      console.log('FFmpeg:', message);
     });
 
-    // Get stream information
-    await ffmpeg.exec(['-i', inputFileName]);
+    try {
+      await ffmpeg.exec(['-i', inputFileName]);
+    } catch {
+      // This error is expected as ffmpeg -i only shows stream info
+      // We'll parse the stream info next
+    }
 
     // Clean up FFmpeg file
     await ffmpeg.deleteFile(inputFileName);
 
-    // Look for frame rate in stream info
+    // Parse metadata from FFmpeg output
     const fpsMatch = streamInfo.match(/([0-9]+(?:\.[0-9]+)?|\d+\/\d+)\s*fps/);
-    let fps = 30; // Default to 30fps if we can't detect it
+    const resolutionMatch = streamInfo.match(/\b(\d{2,5})x(\d{2,5})\b/);
+    const durationMatch = streamInfo.match(/Duration:\s*(\d+):(\d+):(\d+)\.(\d+)/);
+    const codecMatch = streamInfo.match(/Video:\s*(\w+)/);
 
+    // Debug logging
+    console.log('FFmpeg Stream Info:', streamInfo);
+    console.log('Resolution match:', resolutionMatch);
+
+    // Require essential metadata
+    if (!resolutionMatch || !durationMatch) {
+      throw new Error('Could not extract video metadata. The file may be corrupted or in an unsupported format.');
+    }
+
+    // Parse frame rate
+    let fps = 30;
     if (fpsMatch) {
       const fpsStr = fpsMatch[1];
       if (fpsStr.includes('/')) {
@@ -50,76 +85,35 @@ export async function getVideoMetadata(file: File): Promise<VideoMetadata> {
       }
     }
 
-    // Now get the rest of the metadata
-    const metadata = await calculateMetadata(file, fps);
-    return metadata;
-  } catch (error) {
-    throw new Error(`Failed to get video metadata: ${error}`);
-  }
-}
+    // Parse resolution
+    const width = parseInt(resolutionMatch[1]);
+    const height = parseInt(resolutionMatch[2]);
 
-async function calculateMetadata(file: File, fps: number): Promise<VideoMetadata> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    
-    // Create object URL for the thumbnail
-    const objectUrl = URL.createObjectURL(file);
-    video.src = objectUrl;
-    
-    video.onloadedmetadata = () => {
-      // Get basic metadata
-      const duration = video.duration;
-      const width = video.videoWidth;
-      const height = video.videoHeight;
-      
-      // Create a canvas to capture the first frame
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      
-      // Set video to first frame
-      video.currentTime = 0;
-      
-      video.onseeked = () => {
-        // Get thumbnail
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(video, 0, 0, width, height);
-        const thumbnailUrl = canvas.toDataURL('image/jpeg');
-        
-        // Calculate total frames
-        const totalFrames = Math.round(duration * fps);
-        
-        // Clean up
-        video.removeAttribute('src');
-        video.load();
-        URL.revokeObjectURL(objectUrl);
-        
-        resolve({
-          title: file.name,
-          duration,
-          width,
-          height,
-          fps: Math.round(fps * 1000) / 1000, // Round to 3 decimal places
-          totalFrames,
-          thumbnailUrl,
-          codec: 'h264' // Default to h264 since we don't need exact codec
-        });
-      };
-      
-      video.onerror = () => {
-        video.removeAttribute('src');
-        video.load();
-        URL.revokeObjectURL(objectUrl);
-        reject(new Error('Failed to load video metadata'));
-      };
+    // Parse duration
+    const duration = parseInt(durationMatch[1]) * 3600 + // hours
+                    parseInt(durationMatch[2]) * 60 + // minutes
+                    parseInt(durationMatch[3]) + // seconds
+                    parseFloat(`0.${durationMatch[4]}`); // milliseconds
+
+    // Parse codec
+    const codec = codecMatch ? codecMatch[1].toLowerCase() : 'unknown';
+
+    // Calculate total frames
+    const totalFrames = Math.round(duration * fps);
+
+    // Return metadata without thumbnail - it will be generated during frame extraction
+    return {
+      title: file.name,
+      duration,
+      width,
+      height,
+      fps: Math.round(fps * 1000) / 1000,
+      totalFrames,
+      thumbnailUrl: '',
+      codec
     };
-    
-    video.onerror = () => {
-      video.removeAttribute('src');
-      video.load();
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Failed to load video metadata'));
-    };
-  });
+  } catch (error) {
+    console.error('Video metadata error:', error);
+    throw error; // Propagate the error without wrapping it
+  }
 }
