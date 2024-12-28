@@ -478,7 +478,7 @@ export default function ExtractPage() {
               inspired by <a href="https://github.com/SharkWipf/nerf_dataset_preprocessing_helper" target="_blank" rel="noopener noreferrer" className="text-[#3190ff]">SharkWipf.</a>
             </p>
             <p className="text-lg text-gray-700 mt-4">All processing happens in your browser, <span className="font-bold">we will never see or store your data.</span></p>
-            <p className="text-lg text-gray-700 mt-4">Uploads are limited to 1.9GB due to browser memory limitations. Larger files will need to be chunked, or just use FFMPEG to extract the frames and run them through SharkWipf's tool.</p>
+            <p className="text-lg text-gray-700 mt-4">Uploads are limited to 1.9GB due to browser memory limitations. Larger files will need to be chunked, or just use FFMPEG to extract the frames and run them through SharkWipf&apos;s tool.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-7">
