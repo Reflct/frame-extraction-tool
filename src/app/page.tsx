@@ -429,7 +429,20 @@ export default function ExtractPage() {
               <div className="p-6 flex justify-between items-center">
                 <div className="flex items-center gap-4">
                   <a href="https://reflct.app" target="_blank" rel="noopener noreferrer">
-                    <Image src="/Full Logo Vector.svg" alt="Logo" width={120} height={32} className="h-8 w-auto" />
+                    <Image 
+                      src="/Full Logo Vector.svg" 
+                      alt="Logo" 
+                      width={120} 
+                      height={32} 
+                      className="h-8 w-auto hidden md:block" 
+                    />
+                    <Image 
+                      src="/Logo Vector.svg" 
+                      alt="Logo" 
+                      width={32} 
+                      height={32} 
+                      className="h-8 w-auto md:hidden" 
+                    />
                   </a>
                 </div>
                 <div className="flex items-center gap-6">
@@ -437,7 +450,7 @@ export default function ExtractPage() {
                     href="https://discord.gg/rfYNxSw3yx" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="font-dm-mono text-[#111214] text-sm font-medium uppercase leading-[100%] text-edge-cap"
+                    className="font-dm-mono text-[#111214] text-sm font-medium uppercase leading-[100%] text-edge-cap hidden md:block"
                   >
                     Discord
                   </a>
@@ -445,7 +458,7 @@ export default function ExtractPage() {
                     href="https://reflct.app" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="font-dm-mono text-[#111214] text-sm font-medium uppercase leading-[100%] text-edge-cap"
+                    className="font-dm-mono text-[#111214] text-sm font-medium uppercase leading-[100%] text-edge-cap hidden md:block"
                   >
                     Reflct.app
                   </a>
@@ -458,7 +471,8 @@ export default function ExtractPage() {
                     <span 
                       className="font-dm-mono text-white text-sm font-medium uppercase leading-[100%] text-edge-cap"
                     >
-                      Download Frames {state.frames.length > 0 && `(${getSelectedFramesCount(state)})`}
+                      <span className="hidden md:inline">Download </span>
+                      Frames {state.frames.length > 0 && `(${getSelectedFramesCount(state)})`}
                     </span>
                   </Button>
                 </div>
@@ -471,7 +485,7 @@ export default function ExtractPage() {
         <div className="pt-28 space-y-8">
           {/* Description Section */}
           <div className="max-w-3xl pl-7">
-            <h1 className="text-[64px] font-medium mb-4">Frame extraction tool</h1>
+            <h1 className="text-[clamp(36px,8vw,64px)] font-medium mb-4 leading-[1.1]">Frame extraction tool</h1>
             <p className="text-lg text-gray-700">
               Extract full size frames from your video, with blur detection and smart frame selection 
               designed for 3DGS and NeRF dataset preparation. Frame selection 
@@ -481,15 +495,15 @@ export default function ExtractPage() {
             <p className="text-lg text-gray-700 mt-4">Uploads are limited to 1.9GB due to browser memory limitations. Larger files will need to be chunked, or just use FFMPEG to extract the frames and run them through SharkWipf&apos;s tool.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-7">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 px-7">
             {/* Upload Card */}
-            <Card className="rounded-[14px] border border-[#E0E0E0] bg-white">
+            <Card className="rounded-[14px] bg-white">
               <div className="m-4">
                 <div 
                   className={clsx(
-                    "relative w-full h-[300px] border-2 border-dashed rounded-lg flex items-center justify-center text-center p-4",
-                    "hover:bg-gray-50 transition-colors duration-200",
-                    "cursor-pointer"
+                    "relative w-full rounded-lg flex items-center justify-center text-center p-4",
+                    !state.videoFile && "h-[300px] border-2 border-dashed hover:bg-gray-50 transition-colors duration-200 cursor-pointer",
+                    state.videoFile && "min-h-fit"
                   )}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
@@ -502,61 +516,67 @@ export default function ExtractPage() {
                 >
                   {state.loadingMetadata && (
                     <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
-                    <div className="flex flex-col items-center gap-2">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      <p className="text-sm text-muted-foreground">Loading video metadata...</p>
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-sm text-muted-foreground">Loading video metadata...</p>
+                      </div>
                     </div>
-                  </div>
                   )}
                   {state.videoFile ? (
-                    <div className="space-y-6">
-                      <h2 className="text-xl font-semibold">{state.videoFile.name}</h2>
-                      {/* Video and Metadata */}
-                      <div className="flex gap-12">
-                        {/* Video Thumbnail and Replace Button */}
-                        <div className="w-1/2 space-y-4">
-                          {state.videoThumbnailUrl && (
-                            <video 
-                              className="w-full h-auto rounded-lg"
-                              src={state.videoThumbnailUrl}
-                              controls={false}
-                            />
-                          )}
-                          <Button 
-                            variant="secondary"
-                            onClick={() => {
-                              if (state.loadingMetadata || state.processing) return;
-                              openFileSelector();
-                            }}
-                          >
-                            Replace Video
-                          </Button>
-                        </div>
-                        {/* Metadata */}
-                        {state.videoMetadata && (
-                          <div className="grid grid-cols-2 gap-x-12 gap-y-2 text-left">
-                            <div>
-                              <dt className="text-gray-500 mb-1 font-semibold">Duration:</dt>
-                              <dd>{state.videoMetadata.duration.toFixed(2)}s</dd>
-                            </div>
-                            <div>
-                              <dt className="text-gray-500 mb-1 font-semibold">Resolution:</dt>
-                              <dd>{state.videoMetadata.width}x{state.videoMetadata.height}</dd>
-                            </div>
-                            <div>
-                              <dt className="text-gray-500 mb-1 font-semibold">FPS:</dt>
-                              <dd>{state.videoMetadata.fps} fps</dd>
-                            </div>
-                            <div>
-                              <dt className="text-gray-500 mb-1 font-semibold">Frames:</dt>
-                              <dd>{state.videoMetadata.totalFrames}</dd>
-                            </div>
-                            <div>
-                              <dt className="text-gray-500 mb-1 font-semibold">Codec:</dt>
-                              <dd>{state.videoMetadata.codec}</dd>
-                            </div>
+                    <div className="w-full">
+                      <div className="flex flex-col">
+                        <h2 className="text-xl font-semibold mb-4 leading-tight">{state.videoFile.name}</h2>
+                        {/* Video and Metadata */}
+                        <div className="flex flex-col lg:flex-row gap-4 lg:gap-8">
+                          {/* Video Thumbnail and Replace Button */}
+                          <div className="flex flex-col gap-4 lg:w-1/2">
+                            {state.videoThumbnailUrl && (
+                              <div className="flex items-center justify-center">
+                                <video 
+                                  className="w-full h-auto rounded-lg object-contain max-h-[200px]"
+                                  src={state.videoThumbnailUrl}
+                                  controls={false}
+                                />
+                              </div>
+                            )}
+                            <Button
+                              variant="outline"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                openFileSelector();
+                              }}
+                            >
+                              Replace Video
+                            </Button>
                           </div>
-                        )}
+                          {/* Metadata */}
+                          {state.videoMetadata && (
+                            <div className="flex-1 space-y-2">
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                <div>
+                                  <dt className="text-gray-500 mb-1 font-semibold">Duration:</dt>
+                                  <dd>{state.videoMetadata.duration.toFixed(2)}s</dd>
+                                </div>
+                                <div>
+                                  <dt className="text-gray-500 mb-1 font-semibold">Resolution:</dt>
+                                  <dd>{state.videoMetadata.width}x{state.videoMetadata.height}</dd>
+                                </div>
+                                <div>
+                                  <dt className="text-gray-500 mb-1 font-semibold">FPS:</dt>
+                                  <dd>{state.videoMetadata.fps} fps</dd>
+                                </div>
+                                <div>
+                                  <dt className="text-gray-500 mb-1 font-semibold">Frames:</dt>
+                                  <dd>{state.videoMetadata.totalFrames}</dd>
+                                </div>
+                                <div>
+                                  <dt className="text-gray-500 mb-1 font-semibold">Codec:</dt>
+                                  <dd>{state.videoMetadata.codec}</dd>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -583,77 +603,79 @@ export default function ExtractPage() {
 
             {/* Extraction Settings Card - Only shown when video is loaded */}
             {state.videoMetadata && (
-              <Card className="rounded-[14px] border border-[#E0E0E0] bg-white">
-                <div className="m-4">
-                  <h2 className="text-xl font-semibold mb-4">Extraction Settings</h2>
-                  {!state.processing ? (
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Frame Rate (fps)</label>
-                        <Input
-                          type="number"
-                          value={state.fps}
-                          onChange={(e) => setState(prev => ({ ...prev, fps: parseFloat(e.target.value) }))}
-                          min={0.1}
-                          step={0.1}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Format</label>
-                        <select
-                          value={state.format}
-                          onChange={(e) => setState(prev => ({ ...prev, format: e.target.value as 'jpeg' | 'png' }))}
-                          className="w-full p-2 border rounded"
-                        >
-                          <option value="jpeg">JPEG</option>
-                          <option value="png">PNG</option>
-                        </select>
-                      </div>
-                      <Button onClick={handleExtractFrames} className="w-full">
-                        Extract Frames
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {/* Progress Indicators */}
-                      {state.processing && (
-                        <div className="space-y-4">
-                          {state.extractionProgress.total > 0 && (
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span>Extracting Frames...</span>
-                                <span>
-                                  {Math.round((state.extractionProgress.current / state.extractionProgress.total) * 100)}%
-                                  {state.extractionProgress.estimatedTimeMs && (
-                                    <span className="ml-2 text-muted-foreground">
-                                      ({Math.ceil(state.extractionProgress.estimatedTimeMs / 1000)}s remaining)
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
-                              <Progress value={(state.extractionProgress.current / state.extractionProgress.total) * 100} />
-                            </div>
-                          )}
-                          {state.blurProgress.total > 0 && (
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-sm">
-                                <span>Calculating Blur Scores...</span>
-                                <span>
-                                  {Math.round((state.blurProgress.current / state.blurProgress.total) * 100)}%
-                                  {state.blurProgress.estimatedTimeMs && (
-                                    <span className="ml-2 text-muted-foreground">
-                                      ({Math.ceil(state.blurProgress.estimatedTimeMs / 1000)}s remaining)
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
-                              <Progress value={(state.blurProgress.current / state.blurProgress.total) * 100} />
-                            </div>
-                          )}
+              <Card className="rounded-[14px] bg-white">
+                <div className="p-6">
+                  <h2 className="text-xl font-semibold mb-6">Extraction Settings</h2>
+                  <div className="space-y-6 max-w-sm">
+                    {!state.processing ? (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Frame Rate (fps)</label>
+                          <Input
+                            type="number"
+                            value={state.fps}
+                            onChange={(e) => setState(prev => ({ ...prev, fps: parseFloat(e.target.value) }))}
+                            min={0.1}
+                            step={0.1}
+                          />
                         </div>
-                      )}
-                    </div>
-                  )}
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Format</label>
+                          <select
+                            value={state.format}
+                            onChange={(e) => setState(prev => ({ ...prev, format: e.target.value as 'jpeg' | 'png' }))}
+                            className="w-full p-2 border rounded"
+                          >
+                            <option value="jpeg">JPEG</option>
+                            <option value="png">PNG (much slower)</option>
+                          </select>
+                        </div>
+                        <Button onClick={handleExtractFrames} className="w-full">
+                          Extract Frames
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Progress Indicators */}
+                        {state.processing && (
+                          <div className="space-y-4">
+                            {state.extractionProgress.total > 0 && (
+                              <div className="space-y-2">
+                                <div className="flex justify-between text-sm">
+                                  <span>Extracting Frames...</span>
+                                  <span>
+                                    {Math.round((state.extractionProgress.current / state.extractionProgress.total) * 100)}%
+                                    {state.extractionProgress.estimatedTimeMs && (
+                                      <span className="ml-2 text-muted-foreground">
+                                        ({Math.ceil(state.extractionProgress.estimatedTimeMs / 1000)}s remaining)
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <Progress value={(state.extractionProgress.current / state.extractionProgress.total) * 100} />
+                              </div>
+                            )}
+                            {state.blurProgress.total > 0 && (
+                              <div className="space-y-2">
+                                <div className="flex justify-between text-sm">
+                                  <span>Calculating Blur Scores...</span>
+                                  <span>
+                                    {Math.round((state.blurProgress.current / state.blurProgress.total) * 100)}%
+                                    {state.blurProgress.estimatedTimeMs && (
+                                      <span className="ml-2 text-muted-foreground">
+                                        ({Math.ceil(state.blurProgress.estimatedTimeMs / 1000)}s remaining)
+                                      </span>
+                                    )}
+                                  </span>
+                                </div>
+                                <Progress value={(state.blurProgress.current / state.blurProgress.total) * 100} />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </Card>
             )}
@@ -750,44 +772,50 @@ export default function ExtractPage() {
                     </div>
 
                     {/* Histogram */}
-                    <div style={{ width: '100%', height: '200px' }}>
-                      <ResponsiveContainer>
-                        <BarChart data={getChartData(state)}>
-                          <YAxis />
-                          <XAxis label={{ value: 'Frames', position: 'insideBottomRight', offset: -10 }} hide />
-                          <Tooltip content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const frame = state.frames.find(f => f.fileName.replace(/^frame_(\d+)\..*$/, '$1') === payload[0].payload.name);
-                              return (
-                                <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-                                  {frame && (
-                                    <div className="mb-2">
-                                      <Image
-                                        src={URL.createObjectURL(frame.blob)}
-                                        alt={`Frame ${payload[0].payload.name}`}
-                                        width={160}
-                                        height={90}
-                                        className="rounded"
-                                      />
+                    <div className="w-full overflow-x-auto">
+                      <div style={{ 
+                        width: state.frames.length > 80 ? `${Math.max(800, state.frames.length * 8)}px` : '100%'
+                      }}>
+                        <div className="h-[200px]">
+                          <ResponsiveContainer width="100%" height={200}>
+                            <BarChart data={getChartData(state)} margin={{ right: 30, bottom: 20 }}>
+                              <YAxis />
+                              <XAxis label={{ value: 'Frames', position: 'insideBottomRight', offset: -10 }} />
+                              <Tooltip content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const frame = state.frames.find(f => f.fileName.replace(/^frame_(\d+)\..*$/, '$1') === payload[0].payload.name);
+                                  return (
+                                    <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
+                                      {frame && (
+                                        <div className="mb-2">
+                                          <Image
+                                            src={URL.createObjectURL(frame.blob)}
+                                            alt={`Frame ${payload[0].payload.name}`}
+                                            width={160}
+                                            height={90}
+                                            className="rounded"
+                                          />
+                                        </div>
+                                      )}
+                                      <p className="text-sm">Frame: {payload[0].payload.name}</p>
+                                      <p className="text-sm">Blur Score: {payload[0].value}</p>
                                     </div>
-                                  )}
-                                  <p className="text-sm">Frame: {payload[0].payload.name}</p>
-                                  <p className="text-sm">Blur Score: {payload[0].value}</p>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }} />
-                          <Bar dataKey="blurScore">
-                            {getChartData(state).map((entry) => (
-                              <Cell 
-                                key={entry.name}
-                                fill={entry.selected ? '#3190ff' : '#94a3b8'}
-                              />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
+                                  );
+                                }
+                                return null;
+                              }} />
+                              <Bar dataKey="blurScore">
+                                {getChartData(state).map((entry) => (
+                                  <Cell 
+                                    key={entry.name}
+                                    fill={entry.selected ? '#3190ff' : '#94a3b8'}
+                                  />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Frame Grid */}
