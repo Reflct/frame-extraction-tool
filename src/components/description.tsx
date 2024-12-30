@@ -21,7 +21,7 @@ export function Description() {
         <ul className="space-y-4 mb-4">
           <li className="text-[#4B5563] flex items-start group">
             <div className="min-w-[130px] mr-3">
-              <span className="font-medium text-[#111214] transition-colors group-hover:text-[#3190ff]">File size limit</span>
+              <span className="font-medium text-[#111214]">File size limit</span>
             </div>
             <div className="flex-1">
               <p>~1.9GB - this varies due to browser memory limitations</p>
@@ -29,7 +29,7 @@ export function Description() {
           </li>
           <li className="text-[#4B5563] flex items-start group">
             <div className="min-w-[130px] mr-3">
-              <span className="font-medium text-[#111214] transition-colors group-hover:text-[#3190ff]">Supported codecs</span>
+              <span className="font-medium text-[#111214]">Supported codecs</span>
             </div>
             <div className="flex-1">
               <p className="leading-relaxed">H264, HEVC, VP8, VP9, AV1</p>
@@ -37,7 +37,7 @@ export function Description() {
           </li>
         </ul>
         <p className="text-[#4B5563] leading-relaxed">
-          For larger files, chunk the video or use FFMPEG to extract frames directly, then run through SharkWipf&apos;s project.
+          For larger files you will need to chunk the video. 
         </p>
       </div>
     </div>

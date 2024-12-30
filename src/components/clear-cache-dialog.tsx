@@ -32,7 +32,7 @@ export const ClearCacheDialog: React.FC<ClearCacheDialogProps> = ({
             <AlertTriangle className="h-5 w-5 text-yellow-500" />
             <DialogTitle>Clear Existing Frames?</DialogTitle>
           </div>
-          <DialogDescription className="pt-2">
+          <DialogDescription className="pt-2 text-gray-900">
             {frameCount} {frameCount === 1 ? 'frame has' : 'frames have'} already been extracted. 
             Do you want to clear them and extract frames from the new video?
           </DialogDescription>
