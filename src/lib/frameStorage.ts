@@ -5,13 +5,9 @@ interface FrameDBSchema extends DBSchema {
     key: string;
     value: {
       id: string;
-      index: number;
       blob: Blob;
-      fileName: string;
-      format: 'jpeg' | 'png';
-    };
-    indexes: {
-      'by-index': number;
+      name: string;
+      format: string;
     };
   };
 }
@@ -29,70 +25,25 @@ class FrameStorage {
     this.db = await openDB<FrameDBSchema>(this.dbName, 1, {
       upgrade(db) {
         if (!db.objectStoreNames.contains('frames')) {
-          const store = db.createObjectStore('frames', { keyPath: 'id' });
-          store.createIndex('by-index', 'index');
+          db.createObjectStore('frames', { keyPath: 'id' });
         }
       },
     });
   }
 
-  async storeFrame(frameId: string, blob: Blob, fileName: string, format: 'jpeg' | 'png') {
+  async storeFrame(frame: { id: string; blob: Blob; name: string; format: string }) {
     if (!this.db) await this.init();
-    const index = parseInt(frameId);
-    await this.db!.put(this.storeName, { 
-      id: frameId,
-      index,
-      blob, 
-      fileName,
-      format
-    });
+    await this.db!.put(this.storeName, frame);
   }
 
   async getAllFrames() {
     if (!this.db) await this.init();
-    const frames = await this.db!.getAllFromIndex(
-      this.storeName,
-      'by-index'
-    );
-    return frames;
+    return await this.db!.getAll(this.storeName);
   }
 
   async clear() {
-    try {
-      // Close any existing connections
-      if (this.db) {
-        this.db.close();
-        this.db = null;
-      }
-
-      // Delete using idb library
-      await deleteDB(this.dbName);
-
-      // Force delete using native IndexedDB
-      const request = window.indexedDB.deleteDatabase(this.dbName);
-      await new Promise((resolve, reject) => {
-        request.onsuccess = () => {
-          console.log('Database deleted successfully');
-          resolve(undefined);
-        };
-        request.onerror = () => {
-          console.error('Error deleting database');
-          reject(request.error);
-        };
-      });
-
-      // Double check deletion
-      const databases = await window.indexedDB.databases();
-      if (databases.some(db => db.name === this.dbName)) {
-        throw new Error('Failed to delete database');
-      }
-
-      // Initialize fresh database
-      await this.init();
-    } catch (error) {
-      console.error('Error clearing IndexedDB:', error);
-      throw error;
-    }
+    if (!this.db) await this.init();
+    await this.db!.clear(this.storeName);
   }
 
   async close() {
@@ -100,6 +51,11 @@ class FrameStorage {
       this.db.close();
       this.db = null;
     }
+  }
+
+  async delete() {
+    await this.close();
+    await deleteDB(this.dbName);
   }
 }
 

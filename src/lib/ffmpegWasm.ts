@@ -99,12 +99,12 @@ export async function extractFramesFromChunk(
 
       const frameNumber = frameCount + (chunkIndex * Math.ceil(fps * CHUNK_DURATION));
       const frameBlob = new Blob([frameData], { type: `image/${format}` });
-      await frameStorage.storeFrame(
-        frameNumber.toString(),
-        frameBlob,
-        `frame_${frameNumber}.${format}`,
+      await frameStorage.storeFrame({
+        id: frameNumber.toString(),
+        blob: frameBlob,
+        name: `frame_${frameNumber}.${format}`,
         format
-      );
+      });
       frameCount++;
     } catch (error) {
       console.error(`Error processing frame ${filename}:`, error);

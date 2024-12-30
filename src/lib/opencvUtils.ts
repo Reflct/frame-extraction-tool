@@ -77,7 +77,7 @@ export async function loadOpenCV(): Promise<void> {
   return opencvLoadPromise;
 }
 
-export async function calculateBlurScore(imageBlob: Blob): Promise<number> {
+export async function calculateSharpnessScore(imageBlob: Blob): Promise<number> {
   if (!opencvLoaded) {
     await loadOpenCV();
   }
@@ -122,8 +122,8 @@ export async function calculateBlurScore(imageBlob: Blob): Promise<number> {
     
     return scaledScore;
   } catch (error) {
-    console.error('Error in blur detection:', error);
-    throw new Error(`Failed to calculate blur score: ${error}`);
+    console.error('Error in sharpness detection:', error);
+    throw new Error(`Failed to calculate sharpness score: ${error}`);
   } finally {
     // Clean up OpenCV matrices
     if (mat) mat.delete();

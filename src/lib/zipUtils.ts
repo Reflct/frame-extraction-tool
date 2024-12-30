@@ -1,18 +1,19 @@
 import JSZip from 'jszip';
 
 export interface FrameData {
+  id: string;
   blob: Blob;
-  fileName: string;
-  blurScore?: number;
-  format: 'jpeg' | 'png';
+  name: string;
+  format: string;
+  sharpnessScore?: number;
 }
 
-export async function downloadAsZip(frames: FrameData[], fileName = 'frames.zip') {
+export async function downloadAsZip(frames: FrameData[]): Promise<void> {
   const zip = new JSZip();
   
   // Add each frame to the zip
   frames.forEach((frame) => {
-    zip.file(frame.fileName, frame.blob);
+    zip.file(frame.name, frame.blob);
   });
   
   // Generate the zip file
@@ -22,7 +23,7 @@ export async function downloadAsZip(frames: FrameData[], fileName = 'frames.zip'
   const url = URL.createObjectURL(content);
   const a = document.createElement('a');
   a.href = url;
-  a.download = fileName;
+  a.download = 'frames.zip';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

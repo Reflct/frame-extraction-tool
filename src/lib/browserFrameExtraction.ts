@@ -3,97 +3,83 @@ import { frameStorage } from './frameStorage';
 export async function extractFramesInBrowser(
   videoFile: File,
   fps: number,
-  format: 'jpeg' | 'png' = 'jpeg',
-  quality = 0.9,
-  onProgress?: (current: number, total: number) => void
-): Promise<number> {
-  // Create video element
+  format: 'jpeg' | 'png',
+  onProgress: (current: number, total: number) => void,
+  signal?: AbortSignal
+): Promise<Array<{ id: string; blob: Blob; name: string; format: string }>> {
   const video = document.createElement('video');
-  video.style.display = 'none';
-  document.body.appendChild(video);
-
-  // Create canvas
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
 
-  try {
-    // Create blob URL for the video
-    const videoUrl = URL.createObjectURL(videoFile);
-    video.src = videoUrl;
+  // Create URL for video
+  const videoUrl = URL.createObjectURL(videoFile);
 
-    // Wait for video metadata and enough data to play
+  try {
+    // Load video metadata
     await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => {
-        video.currentTime = 0;  // Ensure we start from the beginning
-      };
-      video.onloadeddata = () => resolve();
+      video.onloadedmetadata = () => resolve();
       video.onerror = () => reject(new Error('Failed to load video'));
+      video.src = videoUrl;
     });
 
-    // Set canvas dimensions to match video
+    // Set video dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    // Calculate frame interval based on FPS
-    const frameInterval = 1 / fps;
+    // Calculate frame extraction points
     const duration = video.duration;
+    const frameInterval = 1 / fps;
     const totalFrames = Math.floor(duration * fps);
-    let framesProcessed = 0;
+    let currentFrame = 0;
 
-    // Process frames
-    for (let frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
-      const time = frameIndex * frameInterval;
-      
-      // Ensure we don't exceed video duration
-      if (time >= duration) {
-        break;
+    // Clear existing frames
+    await frameStorage.clear();
+
+    // Extract frames
+    for (let time = 0; time < duration; time += frameInterval) {
+      if (signal?.aborted) {
+        throw new DOMException('Frame extraction cancelled', 'AbortError');
       }
 
-      // Set video time and wait for seeking to complete
+      // Seek to time
+      video.currentTime = time;
       await new Promise<void>((resolve) => {
-        const seekHandler = () => {
-          video.removeEventListener('seeked', seekHandler);
-          resolve();
-        };
-        video.addEventListener('seeked', seekHandler);
-        video.currentTime = time;
+        video.onseeked = () => resolve();
       });
 
       // Draw frame to canvas
       ctx.drawImage(video, 0, 0);
 
       // Convert to blob
-      const blob = await new Promise<Blob>((resolve) => {
+      const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
-          (blob) => resolve(blob!),
-          `image/${format}`,
-          quality
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Failed to create blob'));
+          },
+          format === 'jpeg' ? 'image/jpeg' : 'image/png',
+          0.95
         );
       });
 
-      // Store the frame
-      const paddedIndex = (frameIndex + 1).toString().padStart(4, '0');
-      await frameStorage.storeFrame(
-        frameIndex.toString(),
+      // Store frame
+      const frameId = `frame_${currentFrame.toString().padStart(4, '0')}`;
+      const fileName = `${frameId}.${format}`;
+      await frameStorage.storeFrame({
+        id: frameId,
         blob,
-        `frame_${paddedIndex}.${format}`,
-        format
-      );
-      framesProcessed++;
+        name: fileName,
+        format,
+      });
 
-      // Update progress
-      if (onProgress) {
-        onProgress(framesProcessed, totalFrames);
-      }
-      console.log(`Frame extraction progress: ${framesProcessed}/${totalFrames} (${Math.round((framesProcessed/totalFrames) * 100)}%)`);
+      currentFrame++;
+      onProgress(currentFrame, totalFrames);
     }
 
-    return framesProcessed;
+    // Get all stored frames
+    return await frameStorage.getAllFrames();
   } finally {
     // Clean up
-    if (video.src) {
-      URL.revokeObjectURL(video.src);
-    }
-    document.body.removeChild(video);
+    URL.revokeObjectURL(videoUrl);
   }
 }
