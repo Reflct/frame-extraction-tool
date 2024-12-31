@@ -9,7 +9,6 @@ A powerful web-based tool for extracting and analyzing frames from video files. 
 - Fast processing using WebAssembly
 - Local browser storage for extracted frames
 - Export frames as ZIP archives
-- Modern, responsive UI built with Tailwind CSS
 
 ## Getting Started
 
