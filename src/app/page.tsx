@@ -12,7 +12,7 @@ import { getSelectedFrames, getSelectedFramesCount } from '@/utils/frame-selecti
 
 export default function ExtractPage() {
   const { state, handlers } = useFrameExtraction();
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null) as React.RefObject<HTMLVideoElement>;
 
   return (
     <MainLayout
