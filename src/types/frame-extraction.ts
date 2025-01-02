@@ -26,6 +26,7 @@ export interface ExtractPageState {
   error: string | null;
   showFrames: boolean;
   showClearCacheDialog: boolean;
+  timeRange: [number, number];
 }
 
 export interface ChartData {
@@ -52,4 +53,5 @@ export const defaultState: ExtractPageState = {
   error: null,
   showFrames: false,
   showClearCacheDialog: false,
+  timeRange: [0, 0],
 };

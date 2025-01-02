@@ -11,6 +11,7 @@ interface VideoInputProps {
   videoThumbnail: string | null;
   metadata: VideoMetadata | null;
   loadingMetadata: boolean;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   onVideoChangeAction: (file: File) => void;
   onVideoReplaceAction: () => void;
 }
@@ -20,6 +21,7 @@ export const VideoInput: React.FC<VideoInputProps> = ({
   videoThumbnail,
   metadata,
   loadingMetadata,
+  videoRef,
   onVideoChangeAction,
   onVideoReplaceAction,
 }) => {
@@ -93,6 +95,7 @@ export const VideoInput: React.FC<VideoInputProps> = ({
                 {videoThumbnail && (
                   <div className="flex items-center justify-center">
                     <video 
+                      ref={videoRef}
                       className="w-full h-auto rounded-lg object-contain max-h-[200px]"
                       src={videoThumbnail}
                       controls={false}

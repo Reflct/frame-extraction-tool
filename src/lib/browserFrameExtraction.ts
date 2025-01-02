@@ -4,6 +4,7 @@ export async function extractFramesInBrowser(
   videoFile: File,
   fps: number,
   format: 'jpeg' | 'png',
+  timeRange: [number, number],
   onProgress: (current: number, total: number) => void,
   signal?: AbortSignal
 ): Promise<Array<{ id: string; blob: Blob; name: string; format: string }>> {
@@ -27,7 +28,8 @@ export async function extractFramesInBrowser(
     canvas.height = video.videoHeight;
 
     // Calculate frame extraction points
-    const duration = video.duration;
+    const [startTime, endTime] = timeRange;
+    const duration = endTime - startTime;
     const frameInterval = 1 / fps;
     const totalFrames = Math.floor(duration * fps);
     let currentFrame = 0;
@@ -36,7 +38,7 @@ export async function extractFramesInBrowser(
     await frameStorage.clear();
 
     // Extract frames
-    for (let time = 0; time < duration; time += frameInterval) {
+    for (let time = startTime; time < endTime; time += frameInterval) {
       if (signal?.aborted) {
         throw new DOMException('Frame extraction cancelled', 'AbortError');
       }

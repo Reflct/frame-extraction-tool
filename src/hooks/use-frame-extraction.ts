@@ -10,7 +10,10 @@ import { downloadAsZip, type FrameData } from '@/lib/zipUtils';
 import { getVideoMetadata } from '@/lib/videoUtils';
 
 export function useFrameExtraction() {
-  const [state, setState] = useState<ExtractPageState>(defaultState);
+  const [state, setState] = useState<ExtractPageState>({
+    ...defaultState,
+    timeRange: [0, 0],
+  });
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -51,6 +54,7 @@ export function useFrameExtraction() {
         videoThumbnailUrl: thumbnailUrl,
         loadingMetadata: false,
         fps: 10, // Always set to 10 FPS regardless of video metadata
+        timeRange: [0, metadata.duration], // Set initial time range
       }));
     } catch (error) {
       console.error('Video load error:', error);
@@ -124,6 +128,7 @@ export function useFrameExtraction() {
         state.videoFile,
         state.fps,
         state.format,
+        state.timeRange,
         (current: number, total: number) => {
           setState(prev => ({
             ...prev,
@@ -194,7 +199,7 @@ export function useFrameExtraction() {
     } finally {
       abortControllerRef.current = null;
     }
-  }, [state.videoFile, state.videoMetadata, state.fps, state.format]);
+  }, [state.videoFile, state.videoMetadata, state.fps, state.format, state.timeRange]);
 
   const handleDownload = useCallback(async () => {
     const selectedFrames = getSelectedFrames(state);
@@ -228,6 +233,7 @@ export function useFrameExtraction() {
         percentageThreshold: prev.percentageThreshold,
         batchSize: prev.batchSize,
         batchBuffer: prev.batchBuffer,
+        timeRange: [0, 0],
       }));
     } catch (error) {
       setState(prev => ({

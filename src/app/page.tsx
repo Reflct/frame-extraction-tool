@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { MainLayout } from '@/components/main-layout';
 import { UploadCard } from '@/components/upload-card';
 import { ExtractionSettingsCard } from '@/components/extraction-settings-card';
@@ -11,6 +12,7 @@ import { getSelectedFrames, getSelectedFramesCount } from '@/utils/frame-selecti
 
 export default function ExtractPage() {
   const { state, handlers } = useFrameExtraction();
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   return (
     <MainLayout
@@ -27,6 +29,7 @@ export default function ExtractPage() {
           loadingMetadata={state.loadingMetadata}
           onVideoChangeAction={handlers.handleVideoChange}
           onVideoReplaceAction={handlers.handleVideoReplace}
+          videoRef={videoRef}
         />
 
         {/* Extraction Settings Card */}
@@ -38,8 +41,11 @@ export default function ExtractPage() {
             processing={state.processing}
             extractionProgress={state.extractionProgress}
             sharpnessProgress={state.sharpnessProgress}
+            timeRange={state.timeRange}
+            videoRef={videoRef}
             onFpsChangeAction={(fps) => handlers.setState(prev => ({ ...prev, fps }))}
             onFormatChangeAction={(format) => handlers.setState(prev => ({ ...prev, format }))}
+            onTimeRangeChangeAction={(range) => handlers.setState(prev => ({ ...prev, timeRange: range }))}
             onExtractAction={handlers.handleExtractFrames}
             onCancelAction={handlers.handleCancel}
           />

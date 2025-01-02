@@ -42,3 +42,6 @@ next-env.d.ts
 
 # documentation
 /docs
+
+#windsurf rules
+/.windsurfrules

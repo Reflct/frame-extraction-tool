@@ -9,6 +9,7 @@ interface UploadCardProps {
   videoThumbnail: string | null;
   metadata: VideoMetadata | null;
   loadingMetadata: boolean;
+  videoRef: React.RefObject<HTMLVideoElement>;
   onVideoChangeAction: (file: File) => void;
   onVideoReplaceAction: () => void;
 }
@@ -18,6 +19,7 @@ export function UploadCard({
   videoThumbnail,
   metadata,
   loadingMetadata,
+  videoRef,
   onVideoChangeAction,
   onVideoReplaceAction,
 }: UploadCardProps) {
@@ -29,6 +31,7 @@ export function UploadCard({
           videoThumbnail={videoThumbnail}
           metadata={metadata}
           loadingMetadata={loadingMetadata}
+          videoRef={videoRef}
           onVideoChangeAction={onVideoChangeAction}
           onVideoReplaceAction={onVideoReplaceAction}
         />
