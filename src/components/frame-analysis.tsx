@@ -1,10 +1,13 @@
 'use client';
 
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { BarChart, Bar, YAxis, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Download } from "lucide-react";
 import { type FrameData } from '@/lib/zipUtils';
+import { type FrameMetadata } from '@/types/frame';
 import Image from 'next/image';
+import { FramePreviewDialog } from './frame-preview-dialog';
 
 interface ChartData {
   name: string;
@@ -42,7 +45,21 @@ export function FrameAnalysis({
   onDownloadAction,
   onToggleFramesAction
 }: FrameAnalysisProps) {
-  const chartData = getChartData(frames, selectedFrames);
+  const [selectedFrame, setSelectedFrame] = useState<FrameData | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [frameData, setFrameData] = useState<Record<string, Uint8Array>>({});
+  const convertingRef = useRef<Record<string, boolean>>({});
+
+  // Sort frames by frame number
+  const sortedFrames = useMemo(() => {
+    return [...frames].sort((a, b) => {
+      const aNum = parseInt(a.name.match(/frame_(\d+)/)?.[1] || '0');
+      const bNum = parseInt(b.name.match(/frame_(\d+)/)?.[1] || '0');
+      return aNum - bNum;
+    });
+  }, [frames]);
+
+  const chartData = getChartData(sortedFrames, selectedFrames);
   const selectedCount = selectedFrames.length;
 
   // Calculate Y-axis domain with some padding
@@ -53,6 +70,61 @@ export function FrameAnalysis({
     Math.max(0, minScore - padding),
     Math.min(100, maxScore + padding)
   ];
+
+  // Convert Blob to Uint8Array
+  const convertBlobToUint8Array = useCallback(async (frame: FrameData): Promise<void> => {
+    if (frameData[frame.name] || convertingRef.current[frame.name]) return;
+    
+    convertingRef.current[frame.name] = true;
+    try {
+      const arrayBuffer = await frame.blob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      setFrameData(prev => ({ ...prev, [frame.name]: uint8Array }));
+    } finally {
+      convertingRef.current[frame.name] = false;
+    }
+  }, [frameData]);
+
+  // Handle frame change
+  const handleFrameChange = useCallback(async (frame: FrameMetadata) => {
+    const newFrame = sortedFrames.find(f => f.name === frame.id);
+    if (newFrame) {
+      await convertBlobToUint8Array(newFrame);
+      setSelectedFrame(newFrame);
+    }
+  }, [sortedFrames, convertBlobToUint8Array]);
+
+  // Handle bar click to open preview
+  const handleBarClick = useCallback(async (data: ChartData) => {
+    setSelectedFrame(data.frame);
+    setIsPreviewOpen(true);
+    await convertBlobToUint8Array(data.frame);
+  }, [convertBlobToUint8Array]);
+
+  // Create frame metadata
+  const createFrameMetadata = useCallback((frame: FrameData): FrameMetadata | null => {
+    if (!frameData[frame.name]) {
+      // Start conversion if not already done
+      convertBlobToUint8Array(frame);
+      return null;
+    }
+    return {
+      id: frame.name,
+      name: frame.name,
+      timestamp: parseInt(frame.name.match(/frame_(\d+)/)?.[1] || '0'),
+      format: 'jpeg',
+      sharpnessScore: frame.sharpnessScore,
+      data: frameData[frame.name]
+    };
+  }, [frameData, convertBlobToUint8Array]);
+
+  // Convert sorted frames to metadata
+  const frameMetadata = useMemo(() => 
+    sortedFrames
+      .map(createFrameMetadata)
+      .filter((f): f is FrameMetadata => f !== null),
+    [sortedFrames, createFrameMetadata]
+  );
 
   return (
     <div className="space-y-4">
@@ -90,7 +162,7 @@ export function FrameAnalysis({
         <div className="w-full overflow-x-auto">
           <div style={{ width: Math.max(frames.length * 8, 300), height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
+              <BarChart data={chartData} onClick={(data) => data && handleBarClick(data.activePayload?.[0]?.payload)}>
                 <XAxis 
                   dataKey="name" 
                   tick={false}
@@ -136,7 +208,7 @@ export function FrameAnalysis({
                     return null;
                   }}
                 />
-                <Bar dataKey="sharpnessScore">
+                <Bar dataKey="sharpnessScore" style={{ cursor: 'pointer' }}>
                   {chartData.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
@@ -150,6 +222,16 @@ export function FrameAnalysis({
           </div>
         </div>
       )}
+
+      {/* Frame Preview Dialog */}
+      <FramePreviewDialog
+        open={isPreviewOpen}
+        onOpenChangeAction={setIsPreviewOpen}
+        frame={selectedFrame ? createFrameMetadata(selectedFrame) : null}
+        frames={frameMetadata}
+        isSelected={selectedFrame ? selectedFrames.includes(selectedFrame) : false}
+        onFrameChangeAction={handleFrameChange}
+      />
 
       {/* Frame Grid */}
       {showFrames && selectedFrames.length > 0 && (

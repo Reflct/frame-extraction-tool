@@ -6,7 +6,10 @@ export async function extractFramesInBrowser(
   format: 'jpeg' | 'png',
   timeRange: [number, number],
   onProgress: (current: number, total: number) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  prefix: string = '',
+  useOriginalFrameRate: boolean = false,
+  originalFps?: number
 ): Promise<Array<{ id: string; blob: Blob; name: string; format: string }>> {
   const video = document.createElement('video');
   const canvas = document.createElement('canvas');
@@ -65,7 +68,16 @@ export async function extractFramesInBrowser(
       });
 
       // Store frame
-      const frameId = `frame_${currentFrame.toString().padStart(4, '0')}`;
+      let frameNumber: number;
+      if (useOriginalFrameRate && originalFps) {
+        // Calculate frame number based on original framerate
+        frameNumber = Math.round(time * originalFps);
+      } else {
+        // Use sequential numbering
+        frameNumber = currentFrame;
+      }
+      
+      const frameId = `${prefix || 'frame'}_${frameNumber.toString().padStart(5, '0')}`;
       const fileName = `${frameId}.${format}`;
       await frameStorage.storeFrame({
         id: frameId,

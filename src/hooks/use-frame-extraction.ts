@@ -42,20 +42,50 @@ export function useFrameExtraction() {
     }));
 
     try {
-      // Create thumbnail URL
-      const thumbnailUrl = URL.createObjectURL(file);
+      setState(prev => ({ ...prev, loadingMetadata: true }));
+
+      // Create video URL for both thumbnail and video element
+      const videoUrl = URL.createObjectURL(file);
+
+      // Create a temporary video element to extract the first frame
+      const video = document.createElement('video');
+      video.src = videoUrl;
       
+      // Wait for video metadata to load
+      await new Promise((resolve, reject) => {
+        video.onloadedmetadata = resolve;
+        video.onerror = reject;
+      });
+
+      // Seek to the first frame
+      video.currentTime = 0;
+
+      // Wait for the frame to be available
+      await new Promise((resolve) => {
+        video.onseeked = resolve;
+      });
+
+      // Create a canvas to capture the frame
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
       // Get metadata using FFmpeg
       const metadata = await getVideoMetadata(file);
       
       setState(prev => ({
         ...prev,
         videoMetadata: metadata,
-        videoThumbnailUrl: thumbnailUrl,
+        videoThumbnailUrl: videoUrl, 
         loadingMetadata: false,
-        fps: 10, // Always set to 10 FPS regardless of video metadata
-        timeRange: [0, metadata.duration], // Set initial time range
+        fps: 10, 
+        timeRange: [0, metadata.duration], 
       }));
+
+      // Cleanup temporary elements
+      video.remove();
     } catch (error) {
       console.error('Video load error:', error);
       setState(prev => ({
@@ -64,7 +94,7 @@ export function useFrameExtraction() {
         loadingMetadata: false,
       }));
     }
-  }, [state.videoThumbnailUrl]); // Add videoThumbnailUrl to dependencies for cleanup
+  }, [state.videoFile, state.videoMetadata, state.fps, state.format, state.timeRange, state.prefix, state.useOriginalFrameRate]);
 
   const handleVideoReplace = useCallback(() => {
     setState(prev => ({
@@ -142,7 +172,10 @@ export function useFrameExtraction() {
             },
           }));
         },
-        signal
+        signal,
+        state.prefix,
+        state.useOriginalFrameRate,
+        state.videoMetadata?.fps
       );
       
       if (signal.aborted) {
@@ -199,7 +232,7 @@ export function useFrameExtraction() {
     } finally {
       abortControllerRef.current = null;
     }
-  }, [state.videoFile, state.videoMetadata, state.fps, state.format, state.timeRange]);
+  }, [state.videoFile, state.videoMetadata, state.fps, state.format, state.timeRange, state.prefix, state.useOriginalFrameRate, state.videoThumbnailUrl]);
 
   const handleDownload = useCallback(async () => {
     const selectedFrames = getSelectedFrames(state);

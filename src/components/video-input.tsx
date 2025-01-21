@@ -62,7 +62,7 @@ export const VideoInput: React.FC<VideoInputProps> = ({
   return (
     <div 
       className={clsx(
-        "relative w-full rounded-lg flex items-center justify-center text-center p-4",
+        "relative w-full rounded-lg flex items-center justify-center text-center",
         !video && "h-[300px] border-2 border-dashed hover:bg-gray-50 transition-colors duration-200 cursor-pointer",
         video && "min-h-fit"
       )}
@@ -76,7 +76,7 @@ export const VideoInput: React.FC<VideoInputProps> = ({
       }}
     >
       {loadingMetadata && (
-        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-lg">
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground">Loading video metadata...</p>
@@ -86,53 +86,57 @@ export const VideoInput: React.FC<VideoInputProps> = ({
 
       {video ? (
         <div className="w-full">
-          <div className="flex flex-col">
-            <h2 className="text-xl font-semibold mb-4 leading-tight">{video.name}</h2>
-            {/* Video and Metadata */}
-            <div className="flex flex-col lg:flex-row gap-4 lg:gap-8">
-              {/* Video Thumbnail and Replace Button */}
-              <div className="flex flex-col gap-4 lg:w-1/2">
-                {videoThumbnail && (
-                  <div className="flex items-center justify-center">
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold leading-tight truncate pr-4">{video.name}</h2>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onVideoReplaceAction}
+                className="shrink-0"
+              >
+                Replace Video
+              </Button>
+            </div>
+
+            <div className="flex-1 flex flex-col">
+              {/* Video Preview and Thumbnail */}
+              {videoThumbnail && (
+                <div className="mb-6">
+                  <div className="relative aspect-video bg-muted rounded-xl overflow-hidden">
                     <video 
                       ref={videoRef}
-                      className="w-full h-auto rounded-lg object-contain max-h-[200px]"
+                      className="absolute inset-0 w-full h-full object-cover"
                       src={videoThumbnail}
                       controls={false}
                     />
                   </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onVideoReplaceAction}
-                >
-                  Replace Video
-                </Button>
-              </div>
+                </div>
+              )}
+
               {/* Metadata */}
               {metadata && (
-                <div className="flex-1 space-y-2">
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <div className="flex-1 flex flex-col justify-end mt-auto">
+                  <div className="grid grid-cols-3 gap-x-8 gap-y-3">
                     <div>
-                      <dt className="text-gray-500 mb-1 font-semibold">Duration:</dt>
-                      <dd>{metadata.duration.toFixed(2)}s</dd>
+                      <dt className="text-sm text-muted-foreground">Duration</dt>
+                      <dd className="text-base font-medium mt-0.5">{metadata.duration.toFixed(2)}s</dd>
                     </div>
                     <div>
-                      <dt className="text-gray-500 mb-1 font-semibold">Resolution:</dt>
-                      <dd>{metadata.width}x{metadata.height}</dd>
+                      <dt className="text-sm text-muted-foreground">Resolution</dt>
+                      <dd className="text-base font-medium mt-0.5">{metadata.width}×{metadata.height}</dd>
                     </div>
                     <div>
-                      <dt className="text-gray-500 mb-1 font-semibold">FPS:</dt>
-                      <dd>{metadata.fps} fps</dd>
+                      <dt className="text-sm text-muted-foreground">FPS</dt>
+                      <dd className="text-base font-medium mt-0.5">{metadata.fps} fps</dd>
                     </div>
                     <div>
-                      <dt className="text-gray-500 mb-1 font-semibold">Frames:</dt>
-                      <dd>{metadata.totalFrames}</dd>
+                      <dt className="text-sm text-muted-foreground">Total Frames</dt>
+                      <dd className="text-base font-medium mt-0.5">{metadata.totalFrames}</dd>
                     </div>
                     <div>
-                      <dt className="text-gray-500 mb-1 font-semibold">Codec:</dt>
-                      <dd>{metadata.codec}</dd>
+                      <dt className="text-sm text-muted-foreground">Codec</dt>
+                      <dd className="text-base font-medium mt-0.5">{metadata.codec}</dd>
                     </div>
                   </div>
                 </div>
@@ -141,9 +145,9 @@ export const VideoInput: React.FC<VideoInputProps> = ({
           </div>
         </div>
       ) : (
-        <div>
-          <p>Drag and drop your video here, or click to select</p>
-          <div className="mt-4 flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-col items-center">
+          <p className="text-base mb-6">Drag and drop your video here, or click to select</p>
+          <div className="flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
             <Button
               variant="secondary"
               onClick={() => openFileSelector()}
@@ -151,8 +155,10 @@ export const VideoInput: React.FC<VideoInputProps> = ({
             >
               Select Video
             </Button>
-            <p className="mt-3 text-sm" style={{ color: '#11121452' }}>
-              Maximum file size: 1.9GB. Supported formats: MP4, MOV, AVI, MKV
+            <p className="mt-4 text-sm text-muted-foreground">
+              Maximum file size: 1.9GB
+              <br />
+              Supported formats: MP4, MOV, AVI, MKV
             </p>
           </div>
         </div>

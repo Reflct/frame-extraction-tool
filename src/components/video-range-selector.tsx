@@ -5,23 +5,25 @@ import { Slider } from "@/components/ui/slider"
 
 interface VideoRangeSelectorProps {
   duration: number
+  value: [number, number]
   onRangeChangeAction: (range: [number, number]) => void
   videoRef: React.RefObject<HTMLVideoElement | null>
 }
 
 export function VideoRangeSelector({
   duration,
+  value,
   onRangeChangeAction,
   videoRef,
 }: VideoRangeSelectorProps) {
-  const [range, setRange] = React.useState<[number, number]>([0, duration])
-  const [previewTime, setPreviewTime] = React.useState<number>(0)
   const [activeThumb, setActiveThumb] = React.useState<number | null>(null)
 
-  // Update range when duration changes
+  // Update video position when value changes and no thumb is active
   React.useEffect(() => {
-    setRange([0, duration])
-  }, [duration])
+    if (activeThumb === null && videoRef.current) {
+      videoRef.current.currentTime = value[0]
+    }
+  }, [value, activeThumb, videoRef])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -30,17 +32,16 @@ export function VideoRangeSelector({
     return `${mins}:${secs.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`
   }
 
-  const handleValueChange = (value: number[]) => {
-    if (value.length !== 2) return
+  const handleValueChange = (newValue: number[]) => {
+    if (newValue.length !== 2) return
     
-    const newRange: [number, number] = [value[0], value[1]]
+    const newRange: [number, number] = [newValue[0], newValue[1]]
     
     // Ensure start is not greater than end
     if (newRange[0] > newRange[1]) {
       newRange[0] = newRange[1]
     }
     
-    setRange(newRange)
     onRangeChangeAction(newRange)
 
     // Update video preview based on which handle was moved
@@ -48,7 +49,6 @@ export function VideoRangeSelector({
     if (video) {
       const newTime = activeThumb === 0 ? newRange[0] : newRange[1]
       video.currentTime = newTime
-      setPreviewTime(newTime)
     }
   }
 
@@ -57,22 +57,21 @@ export function VideoRangeSelector({
       <div className="flex justify-between items-center">
         <div className="space-y-1">
           <div className="text-sm font-medium">Start Time</div>
-          <div className="text-sm text-muted-foreground">{formatTime(range[0])}</div>
+          <div className="text-sm text-muted-foreground">{formatTime(value[0])}</div>
         </div>
         <div className="text-sm text-muted-foreground mx-2">to</div>
         <div className="space-y-1 text-right">
           <div className="text-sm font-medium">End Time</div>
-          <div className="text-sm text-muted-foreground">{formatTime(range[1])}</div>
+          <div className="text-sm text-muted-foreground">{formatTime(value[1])}</div>
         </div>
       </div>
       
       <div className="pt-2">
         <Slider
-          defaultValue={[0, duration]}
           min={0}
           max={duration}
           step={0.01}
-          value={[range[0], range[1]]}
+          value={[value[0], value[1]]}
           onValueChange={handleValueChange}
           onValueCommit={() => setActiveThumb(null)}
           onPointerDown={(e) => {
@@ -87,9 +86,8 @@ export function VideoRangeSelector({
         />
       </div>
       
-      <div className="flex justify-between text-sm text-muted-foreground">
-        <div>Duration: {formatTime(range[1] - range[0])}</div>
-        <div>Preview: {formatTime(previewTime)}</div>
+      <div className="text-sm text-muted-foreground">
+        Duration: {formatTime(value[1] - value[0])}
       </div>
     </div>
   )

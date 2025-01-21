@@ -13,6 +13,8 @@ interface ExtractionSettingsCardProps {
   videoMetadata: VideoMetadata | null;
   fps: number;
   format: 'jpeg' | 'png';
+  prefix: string;
+  useOriginalFrameRate: boolean;
   processing: boolean;
   extractionProgress: ProgressInfo;
   sharpnessProgress: ProgressInfo;
@@ -20,6 +22,8 @@ interface ExtractionSettingsCardProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
   onFpsChangeAction: (fps: number) => void;
   onFormatChangeAction: (format: 'jpeg' | 'png') => void;
+  onPrefixChangeAction: (prefix: string) => void;
+  onUseOriginalFrameRateChangeAction: (value: boolean) => void;
   onTimeRangeChangeAction: (range: [number, number]) => void;
   onExtractAction: () => void;
   onCancelAction: () => void;
@@ -29,6 +33,8 @@ export function ExtractionSettingsCard({
   videoMetadata,
   fps,
   format,
+  prefix,
+  useOriginalFrameRate,
   processing,
   extractionProgress,
   sharpnessProgress,
@@ -36,6 +42,8 @@ export function ExtractionSettingsCard({
   videoRef,
   onFpsChangeAction,
   onFormatChangeAction,
+  onPrefixChangeAction,
+  onUseOriginalFrameRateChangeAction,
   onTimeRangeChangeAction,
   onExtractAction,
   onCancelAction,
@@ -44,20 +52,26 @@ export function ExtractionSettingsCard({
 
   return (
     <Card className="rounded-[14px] bg-white">
-      <div className="p-6">
-        <h2 className="text-xl font-semibold mb-6">Extraction Settings</h2>
-        <div className="space-y-6 max-w-sm">
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Extraction Settings</h2>
+        </div>
+        <div className="max-w-lg">
           {!processing ? (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <ExtractionControls
                 fps={fps}
                 format={format}
+                prefix={prefix}
+                useOriginalFrameRate={useOriginalFrameRate}
                 onFpsChangeAction={onFpsChangeAction}
                 onFormatChangeAction={onFormatChangeAction}
+                onPrefixChangeAction={onPrefixChangeAction}
+                onUseOriginalFrameRateChangeAction={onUseOriginalFrameRateChangeAction}
                 videoMetadata={videoMetadata}
                 processing={processing}
               />
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <label className="text-sm font-medium">Time Range</label>
                 <TimeRangeDialog
                   duration={videoMetadata.duration}
@@ -66,9 +80,11 @@ export function ExtractionSettingsCard({
                   onTimeRangeChangeAction={onTimeRangeChangeAction}
                 />
               </div>
-              <Button onClick={onExtractAction} className="w-full">
-                Extract Frames
-              </Button>
+              <div className="pt-2">
+                <Button onClick={onExtractAction} className="w-full text-base py-6" size="lg">
+                  Extract Frames
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">

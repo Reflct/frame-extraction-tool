@@ -13,6 +13,8 @@ export interface ExtractPageState {
   videoMetadata: VideoMetadata | null;
   fps: number;
   format: 'jpeg' | 'png';
+  prefix: string;
+  useOriginalFrameRate: boolean;
   frames: FrameData[];
   processing: boolean;
   loadingMetadata: boolean;
@@ -40,6 +42,8 @@ export const defaultState: ExtractPageState = {
   videoMetadata: null,
   fps: 10,
   format: 'jpeg',
+  prefix: '',
+  useOriginalFrameRate: false,
   frames: [],
   processing: false,
   loadingMetadata: false,

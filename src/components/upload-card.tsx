@@ -24,8 +24,8 @@ export function UploadCard({
   onVideoReplaceAction,
 }: UploadCardProps) {
   return (
-    <Card className="rounded-[14px] bg-white">
-      <div className="m-4">
+    <Card className="rounded-[14px] bg-white h-full">
+      <div className="p-6 h-full">
         <VideoInput
           video={video}
           videoThumbnail={videoThumbnail}

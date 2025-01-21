@@ -36,6 +36,11 @@ class FrameStorage {
     await this.db!.put(this.storeName, frame);
   }
 
+  async getFrame(id: string) {
+    if (!this.db) await this.init();
+    return await this.db!.get(this.storeName, id);
+  }
+
   async getAllFrames() {
     if (!this.db) await this.init();
     return await this.db!.getAll(this.storeName);

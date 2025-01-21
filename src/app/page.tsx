@@ -38,6 +38,8 @@ export default function ExtractPage() {
             videoMetadata={state.videoMetadata}
             fps={state.fps}
             format={state.format}
+            prefix={state.prefix}
+            useOriginalFrameRate={state.useOriginalFrameRate}
             processing={state.processing}
             extractionProgress={state.extractionProgress}
             sharpnessProgress={state.sharpnessProgress}
@@ -45,6 +47,8 @@ export default function ExtractPage() {
             videoRef={videoRef}
             onFpsChangeAction={(fps) => handlers.setState(prev => ({ ...prev, fps }))}
             onFormatChangeAction={(format) => handlers.setState(prev => ({ ...prev, format }))}
+            onPrefixChangeAction={(prefix) => handlers.setState(prev => ({ ...prev, prefix }))}
+            onUseOriginalFrameRateChangeAction={(value) => handlers.setState(prev => ({ ...prev, useOriginalFrameRate: value }))}
             onTimeRangeChangeAction={(range) => handlers.setState(prev => ({ ...prev, timeRange: range }))}
             onExtractAction={handlers.handleExtractFrames}
             onCancelAction={handlers.handleCancel}
