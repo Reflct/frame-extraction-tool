@@ -2,10 +2,8 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { type ExtractPageState, defaultState } from '@/types/frame-extraction';
-import { getSelectedFrames } from '@/utils/frame-selection';
 import { extractFramesInBrowser } from '@/lib/browserFrameExtraction';
 import { calculateSharpnessScore } from '@/lib/opencvUtils';
-import { frameStorage } from '@/lib/frameStorage';
 import { type FrameData } from '@/types/frame';
 import { getVideoMetadata } from '@/lib/videoUtils';
 import JSZip from 'jszip';
@@ -13,7 +11,6 @@ import JSZip from 'jszip';
 export function useFrameExtraction() {
   const [state, setState] = useState<ExtractPageState>(defaultState);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const convertingRef = useRef<Record<string, boolean>>({});
 
   // State update helper with proper typing
   const updateState = useCallback((updater: (prev: ExtractPageState) => ExtractPageState) => {
@@ -101,7 +98,7 @@ export function useFrameExtraction() {
         loadingMetadata: false,
       }));
     }
-  }, [state.videoThumbnailUrl]); 
+  }, [state.videoThumbnailUrl, updateState]);
 
   const handleVideoReplace = useCallback(() => {
     if (state.videoThumbnailUrl) {
@@ -116,7 +113,7 @@ export function useFrameExtraction() {
       selectedFrames: new Set(),
       isImageMode: false,
     }));
-  }, [state.videoThumbnailUrl]); 
+  }, [state.videoThumbnailUrl, updateState]); 
 
   const handleCancel = useCallback(() => {
     if (abortControllerRef.current) {
@@ -129,7 +126,7 @@ export function useFrameExtraction() {
       extractionProgress: { current: 0, total: 0 },
       sharpnessProgress: { current: 0, total: 0 },
     }));
-  }, []);
+  }, [updateState]);
 
   const handleExtractFrames = useCallback(async () => {
     if (!state.videoFile || !state.videoMetadata) {
@@ -240,7 +237,7 @@ export function useFrameExtraction() {
     } finally {
       abortControllerRef.current = null;
     }
-  }, [state.videoFile, state.videoMetadata, state.fps, state.format, state.timeRange, state.prefix, state.useOriginalFrameRate]);
+  }, [state.videoFile, state.videoMetadata, state.fps, state.format, state.timeRange, state.prefix, state.useOriginalFrameRate, updateState]);
 
   const handleDownload = useCallback(async () => {
     // Get automatically selected frames based on mode
@@ -253,7 +250,6 @@ export function useFrameExtraction() {
     } else if (state.selectionMode === 'batched') {
       autoSelectedFrameIds = state.frames
         .reduce((acc, frame, index) => {
-          const batchIndex = Math.floor(index / (state.batchSize + state.batchBuffer));
           const positionInBatch = index % (state.batchSize + state.batchBuffer);
           if (positionInBatch < state.batchSize) {
             acc.push(frame.id);
@@ -303,7 +299,7 @@ export function useFrameExtraction() {
         error: 'Failed to download frames'
       }));
     }
-  }, [state.frames, state.selectionMode, state.percentageThreshold, state.batchSize, state.batchBuffer]);
+  }, [state.frames, state.selectionMode, state.percentageThreshold, state.batchSize, state.batchBuffer, updateState]);
 
   const handleClearCache = useCallback(async () => {
     try {
@@ -326,7 +322,7 @@ export function useFrameExtraction() {
         showClearCacheDialog: false,
       }));
     }
-  }, [state.videoThumbnailUrl]);
+  }, [state.videoThumbnailUrl, updateState]);
 
   const handleImageDirectoryChange = useCallback(async (files: FileList) => {
     updateState(prev => ({
@@ -377,7 +373,7 @@ export function useFrameExtraction() {
         loadingMetadata: false,
       }));
     }
-  }, []);
+  }, [updateState]);
 
   const handleSelectAll = useCallback(() => {
     updateState(prev => ({
@@ -387,7 +383,7 @@ export function useFrameExtraction() {
         selected: true
       }))
     }));
-  }, []);
+  }, [updateState]);
 
   const handleDeselectAll = useCallback(() => {
     updateState(prev => ({
@@ -397,7 +393,7 @@ export function useFrameExtraction() {
         selected: false
       }))
     }));
-  }, []);
+  }, [updateState]);
 
   const handleToggleFrameSelection = useCallback((frameId: string) => {
     updateState(prev => ({
@@ -409,7 +405,7 @@ export function useFrameExtraction() {
         return f;
       })
     }));
-  }, []);
+  }, [updateState]);
 
   const handleSelectionModeChange = useCallback((mode: 'percentage' | 'batched' | 'manual') => {
     updateState(prev => ({
@@ -417,7 +413,7 @@ export function useFrameExtraction() {
       selectionMode: mode,
       frames: prev.frames.map(f => ({ ...f, selected: false }))
     }));
-  }, []);
+  }, [updateState]);
 
   const handleBatchSizeChange = useCallback((size: number) => {
     updateState(prev => ({
@@ -425,7 +421,7 @@ export function useFrameExtraction() {
       batchSize: size,
       frames: prev.frames.map(f => ({ ...f, selected: false }))
     }));
-  }, []);
+  }, [updateState]);
 
   const handleBatchBufferChange = useCallback((buffer: number) => {
     updateState(prev => ({
@@ -433,7 +429,7 @@ export function useFrameExtraction() {
       batchBuffer: buffer,
       frames: prev.frames.map(f => ({ ...f, selected: false }))
     }));
-  }, []);
+  }, [updateState]);
 
   const handlePercentageThresholdChange = useCallback((value: number) => {
     updateState(prev => ({
@@ -441,7 +437,7 @@ export function useFrameExtraction() {
       percentageThreshold: value,
       frames: prev.frames.map(f => ({ ...f, selected: false }))
     }));
-  }, []);
+  }, [updateState]);
 
   return {
     state,

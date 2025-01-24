@@ -20,7 +20,6 @@ interface FrameAnalysisCardProps {
   onBatchSizeChangeAction: (size: number) => void;
   onBatchBufferChangeAction: (buffer: number) => void;
   onToggleFramesAction: () => void;
-  onDownloadAction: () => void;
   onSelectAllAction?: () => void;
   onDeselectAllAction?: () => void;
   onToggleFrameSelectionAction: (frameId: string) => void;
@@ -40,7 +39,6 @@ export function FrameAnalysisCard({
   onBatchSizeChangeAction,
   onBatchBufferChangeAction,
   onToggleFramesAction,
-  onDownloadAction,
   onSelectAllAction,
   onDeselectAllAction,
   onToggleFrameSelectionAction
@@ -86,10 +84,6 @@ export function FrameAnalysisCard({
                 selectedFrames={new Set(selectedFrames.map(f => f.id))}
                 onFrameSelectAction={(frameId) => onToggleFrameSelectionAction(frameId)}
                 showImageGrid={showFrames}
-                processing={processing}
-                onDownloadAction={onDownloadAction}
-                onToggleFramesAction={onToggleFramesAction}
-                isManualMode={selectionMode === 'manual'}
               />
             </Card>
           </div>

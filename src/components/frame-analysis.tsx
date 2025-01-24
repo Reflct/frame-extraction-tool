@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BarChart, Bar, YAxis, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { type FrameData, type FrameMetadata } from '@/types/frame';
@@ -12,10 +12,6 @@ interface FrameAnalysisProps {
   selectedFrames: Set<string>;
   onFrameSelectAction: (frameId: string) => void;
   showImageGrid?: boolean;
-  processing?: boolean;
-  onDownloadAction?: () => void;
-  onToggleFramesAction?: () => void;
-  isManualMode?: boolean;
 }
 
 export function FrameAnalysis({
@@ -23,10 +19,6 @@ export function FrameAnalysis({
   selectedFrames,
   onFrameSelectAction,
   showImageGrid = true,
-  processing = false,
-  onDownloadAction,
-  onToggleFramesAction,
-  isManualMode = false
 }: FrameAnalysisProps) {
   const [selectedFrame, setSelectedFrame] = useState<FrameData | null>(null);
   const [hoveredFrame, setHoveredFrame] = useState<FrameData | null>(null);
@@ -77,15 +69,6 @@ export function FrameAnalysis({
       </div>
     );
   }, [getFrameUrl]);
-
-  // Sort frames by frame number
-  const sortedFrames = useMemo(() => {
-    return [...frames].sort((a, b) => {
-      const aNum = parseInt(a.name.match(/frame_(\d+)/)?.[1] || '0');
-      const bNum = parseInt(b.name.match(/frame_(\d+)/)?.[1] || '0');
-      return aNum - bNum;
-    });
-  }, [frames]);
 
   // Convert Blob to Uint8Array
   const convertBlobToUint8Array = useCallback(async (frame: FrameData): Promise<void> => {

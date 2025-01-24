@@ -80,8 +80,6 @@ export function FrameSelection({
   onPercentageThresholdChangeAction,
   onBatchSizeChangeAction,
   onBatchBufferChangeAction,
-  onSelectAllAction,
-  onDeselectAllAction,
   processing
 }: FrameSelectionProps) {
   return (

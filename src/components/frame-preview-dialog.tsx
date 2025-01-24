@@ -179,6 +179,7 @@ export function FramePreviewDialog({
               willChange: 'transform',
             }}
           >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               ref={imageRef}
               src={frame.data ? URL.createObjectURL(new Blob([frame.data], { type: `image/${frame.format}` })) : ''}

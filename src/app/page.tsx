@@ -75,7 +75,6 @@ export default function ExtractPage() {
         onBatchSizeChangeAction={handlers.handleBatchSizeChange}
         onBatchBufferChangeAction={handlers.handleBatchBufferChange}
         onToggleFramesAction={() => setState(prev => ({ ...prev, showFrames: !prev.showFrames }))}
-        onDownloadAction={handlers.handleDownload}
         onSelectAllAction={handlers.handleSelectAll}
         onDeselectAllAction={handlers.handleDeselectAll}
         onToggleFrameSelectionAction={handlers.handleToggleFrameSelection}
