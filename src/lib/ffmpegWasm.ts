@@ -103,7 +103,8 @@ export async function extractFramesFromChunk(
         id: frameNumber.toString(),
         blob: frameBlob,
         name: `frame_${frameNumber}.${format}`,
-        format
+        format,
+        timestamp: frameNumber * (1000 / fps) // Convert frame number to milliseconds
       });
       frameCount++;
     } catch (error) {

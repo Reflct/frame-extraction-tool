@@ -11,9 +11,10 @@ interface VideoInputProps {
   videoThumbnail: string | null;
   metadata: VideoMetadata | null;
   loadingMetadata: boolean;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
+  videoRef: React.RefObject<HTMLVideoElement>;
   onVideoChangeAction: (file: File) => void;
   onVideoReplaceAction: () => void;
+  onImageDirectoryChangeAction?: (files: FileList) => Promise<void>;
 }
 
 export const VideoInput: React.FC<VideoInputProps> = ({
@@ -24,6 +25,7 @@ export const VideoInput: React.FC<VideoInputProps> = ({
   videoRef,
   onVideoChangeAction,
   onVideoReplaceAction,
+  onImageDirectoryChangeAction,
 }) => {
   const openFileSelector = () => {
     if (loadingMetadata) return;
@@ -59,6 +61,43 @@ export const VideoInput: React.FC<VideoInputProps> = ({
     onVideoChangeAction(file);
   }, [loadingMetadata, onVideoChangeAction]);
 
+  const openDirectorySelector = useCallback(() => {
+    if (loadingMetadata) return;
+    
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    // Set directory selection with proper types
+    input.setAttribute('webkitdirectory', '');
+    input.setAttribute('directory', '');
+    input.setAttribute('mozdirectory', '');
+    
+    input.onchange = (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      if (!target.files || target.files.length === 0) {
+        console.error('No files selected');
+        return;
+      }
+
+      const imageFiles = Array.from(target.files).filter(file => 
+        file.type.startsWith('image/') || 
+        file.name.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/)
+      );
+      
+      if (imageFiles.length === 0) {
+        console.error('No valid image files found in the selected directory');
+        return;
+      }
+      
+      if (onImageDirectoryChangeAction) {
+        onImageDirectoryChangeAction(target.files);
+      }
+      target.value = '';
+    };
+    input.click();
+  }, [loadingMetadata, onImageDirectoryChangeAction]);
+
   return (
     <div 
       className={clsx(
@@ -69,8 +108,8 @@ export const VideoInput: React.FC<VideoInputProps> = ({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
       onClick={(e) => {
-        e.preventDefault();
-        if (!video && !loadingMetadata) {
+        // Only handle clicks on the container itself, not its children
+        if (e.target === e.currentTarget && !video && !loadingMetadata) {
           openFileSelector();
         }
       }}
@@ -145,21 +184,38 @@ export const VideoInput: React.FC<VideoInputProps> = ({
           </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center">
-          <p className="text-base mb-6">Drag and drop your video here, or click to select</p>
-          <div className="flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-lg font-semibold">Upload a video</p>
+            <p className="text-sm text-muted-foreground max-w-[400px]">
+              Drag and drop your video here, or click to select
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 items-center">
             <Button
               variant="secondary"
-              onClick={() => openFileSelector()}
-              className="w-40"
+              size="lg"
+              className="w-full"
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent the parent div's onClick from firing
+                openFileSelector();
+              }}
+              disabled={loadingMetadata}
             >
-              Select Video
+              Choose Video
             </Button>
-            <p className="mt-4 text-sm text-muted-foreground">
-              Maximum file size: 1.9GB
-              <br />
-              Supported formats: MP4, MOV, AVI, MKV
-            </p>
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full"
+              onClick={(e) => {
+                e.stopPropagation();
+                openDirectorySelector();
+              }}
+              disabled={loadingMetadata}
+            >
+              Choose Image Directory
+            </Button>
           </div>
         </div>
       )}

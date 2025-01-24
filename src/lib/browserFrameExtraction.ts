@@ -10,7 +10,7 @@ export async function extractFramesInBrowser(
   prefix: string = '',
   useOriginalFrameRate: boolean = false,
   originalFps?: number
-): Promise<Array<{ id: string; blob: Blob; name: string; format: string }>> {
+): Promise<Array<{ id: string; blob: Blob; name: string; format: string; timestamp: number }>> {
   const video = document.createElement('video');
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d')!;
@@ -84,6 +84,7 @@ export async function extractFramesInBrowser(
         blob,
         name: fileName,
         format,
+        timestamp: time,
       });
 
       currentFrame++;

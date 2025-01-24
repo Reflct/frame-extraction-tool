@@ -1,5 +1,5 @@
 import { type ExtractPageState, type ChartData } from '@/types/frame-extraction';
-import { type FrameData } from '@/lib/zipUtils';
+import { type FrameData } from '@/types/frame';
 
 export function getSelectedFramesCount(state: ExtractPageState): number {
   return getSelectedFrames(state).length;
@@ -15,6 +15,11 @@ export function getSelectedFrames(state: ExtractPageState): FrameData[] {
   );
 
   if (framesWithScores.length === 0) return [];
+
+  // In manual mode, return frames that are explicitly selected
+  if (state.selectionMode === 'manual') {
+    return state.frames.filter(frame => frame.selected);
+  }
 
   if (state.selectionMode === 'percentage') {
     // Sort frames by sharpness score in descending order (sharpest first)

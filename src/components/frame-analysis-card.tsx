@@ -4,23 +4,26 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FrameSelection } from '@/components/frame-selection';
 import { FrameAnalysis } from '@/components/frame-analysis';
-import { type FrameData } from '@/lib/zipUtils';
+import { type FrameData } from '@/types/frame';
 
 interface FrameAnalysisCardProps {
   frames: FrameData[];
   selectedFrames: FrameData[];
   showFrames: boolean;
   processing: boolean;
-  selectionMode: 'percentage' | 'batched';
+  selectionMode: 'percentage' | 'batched' | 'manual';
   percentageThreshold: number;
   batchSize: number;
   batchBuffer: number;
-  onSelectionModeChangeAction: (mode: 'percentage' | 'batched') => void;
+  onSelectionModeChangeAction: (mode: 'percentage' | 'batched' | 'manual') => void;
   onPercentageThresholdChangeAction: (value: number) => void;
   onBatchSizeChangeAction: (size: number) => void;
   onBatchBufferChangeAction: (buffer: number) => void;
   onToggleFramesAction: () => void;
   onDownloadAction: () => void;
+  onSelectAllAction?: () => void;
+  onDeselectAllAction?: () => void;
+  onToggleFrameSelectionAction: (frameId: string) => void;
 }
 
 export function FrameAnalysisCard({
@@ -37,7 +40,10 @@ export function FrameAnalysisCard({
   onBatchSizeChangeAction,
   onBatchBufferChangeAction,
   onToggleFramesAction,
-  onDownloadAction
+  onDownloadAction,
+  onSelectAllAction,
+  onDeselectAllAction,
+  onToggleFrameSelectionAction
 }: FrameAnalysisCardProps) {
   if (frames.length === 0) return null;
 
@@ -67,19 +73,25 @@ export function FrameAnalysisCard({
                 onPercentageThresholdChangeAction={onPercentageThresholdChangeAction}
                 onBatchSizeChangeAction={onBatchSizeChangeAction}
                 onBatchBufferChangeAction={onBatchBufferChangeAction}
+                onSelectAllAction={onSelectAllAction}
+                onDeselectAllAction={onDeselectAllAction}
                 processing={processing}
               />
             </div>
 
             {/* Frame Analysis */}
-            <FrameAnalysis
-              frames={frames}
-              selectedFrames={selectedFrames}
-              showFrames={showFrames}
-              processing={processing}
-              onDownloadAction={onDownloadAction}
-              onToggleFramesAction={onToggleFramesAction}
-            />
+            <Card className="p-6">
+              <FrameAnalysis
+                frames={frames}
+                selectedFrames={new Set(selectedFrames.map(f => f.id))}
+                onFrameSelectAction={(frameId) => onToggleFrameSelectionAction(frameId)}
+                showImageGrid={showFrames}
+                processing={processing}
+                onDownloadAction={onDownloadAction}
+                onToggleFramesAction={onToggleFramesAction}
+                isManualMode={selectionMode === 'manual'}
+              />
+            </Card>
           </div>
         </div>
       </Card>

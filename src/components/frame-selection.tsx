@@ -6,14 +6,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Slider } from '@/components/ui/slider';
 
 interface FrameSelectionProps {
-  selectionMode: 'percentage' | 'batched';
+  selectionMode: 'percentage' | 'batched' | 'manual';
   percentageThreshold: number;
   batchSize: number;
   batchBuffer: number;
-  onSelectionModeChangeAction: (mode: 'percentage' | 'batched') => void;
+  onSelectionModeChangeAction: (mode: 'percentage' | 'batched' | 'manual') => void;
   onPercentageThresholdChangeAction: (value: number) => void;
   onBatchSizeChangeAction: (size: number) => void;
   onBatchBufferChangeAction: (buffer: number) => void;
+  onSelectAllAction?: () => void;
+  onDeselectAllAction?: () => void;
   processing: boolean;
 }
 
@@ -78,6 +80,8 @@ export function FrameSelection({
   onPercentageThresholdChangeAction,
   onBatchSizeChangeAction,
   onBatchBufferChangeAction,
+  onSelectAllAction,
+  onDeselectAllAction,
   processing
 }: FrameSelectionProps) {
   return (
@@ -87,12 +91,12 @@ export function FrameSelection({
           defaultValue="batched" 
           value={selectionMode} 
           onValueChange={(value: string) => {
-            if (value === 'percentage' || value === 'batched') {
+            if (value === 'percentage' || value === 'batched' || value === 'manual') {
               onSelectionModeChangeAction(value);
             }
           }}
         >
-          <TabsList className="grid w-full grid-cols-2 gap-2 p-0 bg-transparent">
+          <TabsList className="grid w-full grid-cols-3 gap-2 p-0 bg-transparent">
             <TabsTrigger 
               value="batched"
               className="border data-[state=active]:border-dark data-[state=inactive]:border-gray data-[state=active]:bg-transparent data-[state=inactive]:text-gray"
@@ -100,59 +104,67 @@ export function FrameSelection({
               Batch Selection
             </TabsTrigger>
             <TabsTrigger 
-              value="percentage" 
+              value="percentage"
               className="border data-[state=active]:border-dark data-[state=inactive]:border-gray data-[state=active]:bg-transparent data-[state=inactive]:text-gray"
             >
               Top Percentage
             </TabsTrigger>
+            <TabsTrigger 
+              value="manual"
+              className="border data-[state=active]:border-dark data-[state=inactive]:border-gray data-[state=active]:bg-transparent data-[state=inactive]:text-gray"
+            >
+              Manual Selection
+            </TabsTrigger>
           </TabsList>
-          <TabsContent value="batched">
-            <div className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <div>
-                  <label className="text-sm font-bold">Batch Size</label>
-                  <p className="text-sm text-dark mt-1">The best frame is selected from each batch.</p>
-                </div>
+
+          <TabsContent value="batched" className="space-y-4">
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Select frames in batches to reduce redundancy. You can also manually select additional frames using A/D keys.
+                <br />- Batch Size: Number of frames to select from each segment
+                <br />- Buffer Size: Number of frames to skip between segments
+              </p>
+              <div className="grid grid-cols-2 gap-4">
                 <NumberInput
                   value={batchSize}
                   onChange={onBatchSizeChangeAction}
                   min={1}
-                  className="w-48"
+                  label="Batch Size"
                   disabled={processing}
                 />
-              </div>
-              <div className="space-y-2">
-                <div>
-                  <label className="text-sm font-bold">Buffer Size</label>
-                  <p className="text-sm text-dark mt-1">Number of frames to skip between batches. Can be zero.</p>
-                </div>
                 <NumberInput
                   value={batchBuffer}
                   onChange={onBatchBufferChangeAction}
                   min={0}
-                  className="w-48"
+                  label="Buffer Size"
                   disabled={processing}
                 />
               </div>
             </div>
           </TabsContent>
-          <TabsContent value="percentage">
-            <div className="space-y-2 pt-4">
-              <div>
-                <label className="text-sm font-bold">Top Percentage</label>
-                <div className="flex items-center gap-4 mt-2">
-                  <Slider
-                    value={[percentageThreshold]}
-                    onValueChange={([value]) => onPercentageThresholdChangeAction(value)}
-                    max={100}
-                    step={1}
-                    className="flex-1"
-                    disabled={processing}
-                  />
-                  <span className="text-sm w-12 text-right">{percentageThreshold}%</span>
-                </div>
-              </div>
+
+          <TabsContent value="percentage" className="space-y-4">
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Select frames based on sharpness score. Higher percentage includes more frames.
+                <br />You can also manually select additional frames using A/D keys.
+              </p>
+              <Slider
+                value={[percentageThreshold]}
+                onValueChange={([value]) => onPercentageThresholdChangeAction(value)}
+                min={1}
+                max={100}
+                step={1}
+                disabled={processing}
+              />
+              <div className="text-sm">Top {percentageThreshold}% of frames</div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="manual" className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Manually select frames using A/D keys while hovering over them in the histogram or frame grid.
+            </p>
           </TabsContent>
         </Tabs>
       </div>

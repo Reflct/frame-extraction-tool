@@ -12,73 +12,55 @@ interface FramePreviewDialogProps {
   onOpenChangeAction: (open: boolean) => void;
   frame: FrameMetadata | null;
   isSelected?: boolean;
-  frames: FrameMetadata[];
-  onFrameChangeAction: (frame: FrameMetadata) => void;
+  onNext?: (frame: FrameMetadata) => void;
+  onPrevious?: (frame: FrameMetadata) => void;
+  onToggleSelection?: () => void;
 }
 
 export function FramePreviewDialog({
   open,
-  onOpenChangeAction,
+  onOpenChangeAction: onOpenChange,
   frame,
   isSelected = false,
-  frames,
-  onFrameChangeAction
+  onNext,
+  onPrevious,
+  onToggleSelection
 }: FramePreviewDialogProps) {
-  const [frameUrls, setFrameUrls] = useState<Record<string, string>>({});
   const [isZooming, setIsZooming] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const imageRef = useRef<HTMLImageElement>(null);
-  const urlsRef = useRef<Record<string, string>>(frameUrls);
+  const [localSelected, setLocalSelected] = useState(isSelected);
 
-  // Find current frame index and adjacent frames
-  const currentIndex = frame ? frames.findIndex(f => f.id === frame.id) : -1;
-  const prevFrame = currentIndex > 0 ? frames[currentIndex - 1] : null;
-  const nextFrame = currentIndex < frames.length - 1 ? frames[currentIndex + 1] : null;
-
-  // Create object URL from frame data
+  // Update local selection state when prop changes
   useEffect(() => {
-    if (!frame?.data) return;
+    setLocalSelected(isSelected);
+  }, [isSelected]);
 
-    const framesToLoad = [frame, prevFrame, nextFrame].filter((f): f is FrameMetadata => f !== null && !!f.data);
-    const newUrls: Record<string, string> = {};
-    let hasNewUrls = false;
-
-    framesToLoad.forEach(f => {
-      if (!urlsRef.current[f.id]) {
-        const blob = new Blob([f.data!], { type: `image/${f.format}` });
-        newUrls[f.id] = URL.createObjectURL(blob);
-        hasNewUrls = true;
-      }
-    });
-
-    if (hasNewUrls) {
-      const updatedUrls = { ...urlsRef.current, ...newUrls };
-      urlsRef.current = updatedUrls;
-      setFrameUrls(updatedUrls);
-    }
-
-    return () => {
-      const currentFrameIds = new Set(framesToLoad.map(f => f.id));
-      Object.entries(urlsRef.current).forEach(([id, url]) => {
-        if (!currentFrameIds.has(id)) {
-          URL.revokeObjectURL(url);
-          delete urlsRef.current[id];
-        }
-      });
-      setFrameUrls(urlsRef.current);
-    };
-  }, [frame?.id, frame?.data, prevFrame?.id, prevFrame?.data, nextFrame?.id, nextFrame?.data, frame, prevFrame, nextFrame]);
-
-  // Handle zoom key press
+  // Handle keyboard navigation and zoom
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!open) return;
+      
       if (e.key.toLowerCase() === 'z') {
+        e.preventDefault();
         setIsZooming(true);
+      } else if (onToggleSelection && (e.key.toLowerCase() === 'a' || e.key.toLowerCase() === 'd')) {
+        e.preventDefault();
+        onToggleSelection();
+      } else if (e.key === 'ArrowLeft' && onPrevious && frame) {
+        e.preventDefault();
+        onPrevious(frame);
+      } else if (e.key === 'ArrowRight' && onNext && frame) {
+        e.preventDefault();
+        onNext(frame);
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (!open) return;
+      
       if (e.key.toLowerCase() === 'z') {
+        e.preventDefault();
         setIsZooming(false);
       }
     };
@@ -90,103 +72,135 @@ export function FramePreviewDialog({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
+  }, [open, onToggleSelection, onNext, onPrevious, frame]);
+
+  // Handle mouse movement for zoom with debounce
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
+    if (!imageRef.current) return;
+
+    // Use requestAnimationFrame for smooth updates
+    requestAnimationFrame(() => {
+      const rect = imageRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      setMousePos({ x, y });
+    });
   }, []);
 
-  // Handle mouse movement for zoom
-  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLImageElement>) => {
-    if (!imageRef.current || !isZooming) return;
-
-    const rect = imageRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setMousePos({ x, y });
-  }, [isZooming]);
-
-  // Handle keyboard navigation
+  // Reset zoom state when dialog closes
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setIsZooming(false);
+      setMousePos({ x: 0, y: 0 });
+    }
+  }, [open]);
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft' && currentIndex > 0) {
-        onFrameChangeAction(frames[currentIndex - 1]);
-      } else if (e.key === 'ArrowRight' && currentIndex < frames.length - 1) {
-        onFrameChangeAction(frames[currentIndex + 1]);
-      }
-    };
+  const handleToggleSelection = useCallback(() => {
+    if (onToggleSelection) {
+      onToggleSelection();
+      setLocalSelected(!localSelected);
+    }
+  }, [onToggleSelection, localSelected]);
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, frames, currentIndex, onFrameChangeAction]);
+  if (!frame) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChangeAction}>
-      <DialogContent className="max-w-7xl w-[95vw]">
-        <DialogTitle className="flex items-center justify-between">
-          <span className="text-lg">Frame {frame?.name}</span>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl">
+        <DialogTitle className="flex items-center justify-between pr-12">
           <div className="flex items-center gap-4">
-            {frame?.sharpnessScore !== undefined && (
-              <span className="text-base font-medium">
-                Sharpness: {frame.sharpnessScore.toFixed(2)}
-              </span>
-            )}
-            <span 
-              className={cn(
-                "px-3 py-1.5 rounded-md text-base font-medium",
-                isSelected 
-                  ? "bg-blue-500/20 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400" 
-                  : "bg-red-500/20 text-red-600 dark:bg-red-500/10 dark:text-red-400"
+            <span>Frame Preview</span>
+            <div className="flex items-center gap-4">
+              {frame && (
+                <Button
+                  variant={localSelected ? "default" : "destructive"}
+                  size="sm"
+                  onClick={handleToggleSelection}
+                  className={cn(
+                    "text-sm",
+                    localSelected ? "bg-blue-500 hover:bg-blue-600" : "bg-red-500 hover:bg-red-600",
+                    "text-white",
+                    !onToggleSelection && "opacity-60 cursor-not-allowed hover:bg-blue-500"
+                  )}
+                  disabled={!onToggleSelection}
+                >
+                  {localSelected ? "Selected" : "Not Selected"}
+                  {onToggleSelection && (
+                    <span className="ml-2 text-xs text-white/80">
+                      (Press A/D)
+                    </span>
+                  )}
+                </Button>
               )}
+              {frame?.sharpnessScore !== undefined && (
+                <div className="text-sm text-muted-foreground">
+                  Sharpness: {frame.sharpnessScore.toFixed(2)}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => onPrevious?.(frame)}
+              disabled={!onPrevious}
             >
-              {isSelected ? "Selected" : "Not Selected"}
-            </span>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => onNext?.(frame)}
+              disabled={!onNext}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
         </DialogTitle>
 
-        <div className="relative flex items-center justify-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => currentIndex > 0 && onFrameChangeAction(frames[currentIndex - 1])}
-            disabled={currentIndex <= 0}
-            className="absolute left-2 z-10 bg-background/80 hover:bg-background/90"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-
-          <div
-            className="relative overflow-hidden rounded-lg w-full"
-            style={{ maxHeight: '80vh' }}
-          >
-            {frame && frameUrls[frame.id] && (
-              <img
-                ref={imageRef}
-                src={frameUrls[frame.id]}
-                alt={frame.name}
-                className={`max-h-full w-full object-contain ${
-                  isZooming ? 'cursor-zoom-in' : ''
-                }`}
-                style={{
-                  transform: isZooming ? `scale(2.5)` : 'none',
-                  transformOrigin: isZooming ? `${mousePos.x}% ${mousePos.y}%` : 'center',
-                  transition: isZooming ? 'none' : 'transform 0.2s ease-out'
-                }}
-                onMouseMove={handleMouseMove}
-              />
+        <div 
+          className="relative mt-4 overflow-hidden rounded-lg border"
+          style={{ 
+            aspectRatio: '16/9',
+          }}
+        >
+          <div 
+            className={cn(
+              "relative w-full h-full will-change-transform",
+              isZooming && "scale-[2.5]"
             )}
-            <div className="absolute bottom-4 right-4 bg-background/80 text-foreground px-3 py-1.5 rounded-md text-sm">
-              Hold Z to zoom
-            </div>
-          </div>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => currentIndex < frames.length - 1 && onFrameChangeAction(frames[currentIndex + 1])}
-            disabled={currentIndex >= frames.length - 1}
-            className="absolute right-2 z-10 bg-background/80 hover:bg-background/90"
+            style={{
+              transform: `scale(${isZooming ? 2.5 : 1})`,
+              transformOrigin: `${mousePos.x}% ${mousePos.y}%`,
+              transition: 'transform 0.15s ease-out',
+              willChange: 'transform',
+            }}
           >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+            <img
+              ref={imageRef}
+              src={frame.data ? URL.createObjectURL(new Blob([frame.data], { type: `image/${frame.format}` })) : ''}
+              alt={frame.name}
+              onMouseMove={handleMouseMove}
+              className="absolute inset-0 w-full h-full object-contain"
+              style={{
+                willChange: 'transform',
+                backfaceVisibility: 'hidden',
+              }}
+            />
+          </div>
+          <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
+            Hold Z to zoom
+          </div>
+        </div>
+
+        <div className="mt-2 text-sm text-muted-foreground">
+          <div>Name: {frame.name}</div>
+          {frame.sharpnessScore !== undefined && (
+            <div>Sharpness Score: {frame.sharpnessScore.toFixed(2)}</div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

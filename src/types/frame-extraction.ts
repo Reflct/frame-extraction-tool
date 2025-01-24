@@ -1,5 +1,5 @@
 import { type VideoMetadata } from '@/lib/videoUtils';
-import { type FrameData } from '@/lib/zipUtils';
+import { type FrameData } from '@/types/frame';
 
 export interface ProgressInfo {
   current: number;
@@ -21,7 +21,7 @@ export interface ExtractPageState {
   videoThumbnailUrl: string | null;
   extractionProgress: ProgressInfo;
   sharpnessProgress: ProgressInfo;
-  selectionMode: 'percentage' | 'batched';
+  selectionMode: 'percentage' | 'batched' | 'manual';
   percentageThreshold: number;
   batchSize: number;
   batchBuffer: number;
@@ -29,6 +29,8 @@ export interface ExtractPageState {
   showFrames: boolean;
   showClearCacheDialog: boolean;
   timeRange: [number, number];
+  imageFiles: FileList | null;
+  isImageMode: boolean;
 }
 
 export interface ChartData {
@@ -50,12 +52,14 @@ export const defaultState: ExtractPageState = {
   videoThumbnailUrl: null,
   extractionProgress: { current: 0, total: 0 },
   sharpnessProgress: { current: 0, total: 0 },
-  selectionMode: 'batched',
-  percentageThreshold: 25,
-  batchSize: 3,
-  batchBuffer: 1,
+  selectionMode: 'percentage',
+  percentageThreshold: 50,
+  batchSize: 10,
+  batchBuffer: 3,
   error: null,
-  showFrames: false,
+  showFrames: true,
   showClearCacheDialog: false,
   timeRange: [0, 0],
+  imageFiles: null,
+  isImageMode: false,
 };
