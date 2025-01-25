@@ -1,14 +1,10 @@
 import { openDB, deleteDB, DBSchema, IDBPDatabase } from 'idb';
+import { type FrameData } from '@/types/frame';
 
 interface FrameDBSchema extends DBSchema {
   frames: {
     key: string;
-    value: {
-      id: string;
-      blob: Blob;
-      name: string;
-      format: string;
-    };
+    value: FrameData;
   };
 }
 
@@ -31,7 +27,7 @@ class FrameStorage {
     });
   }
 
-  async storeFrame(frame: { id: string; blob: Blob; name: string; format: string }) {
+  async storeFrame(frame: FrameData) {
     if (!this.db) await this.init();
     await this.db!.put(this.storeName, frame);
   }
@@ -44,6 +40,11 @@ class FrameStorage {
   async getAllFrames() {
     if (!this.db) await this.init();
     return await this.db!.getAll(this.storeName);
+  }
+
+  async deleteFrame(id: string) {
+    if (!this.db) await this.init();
+    await this.db!.delete(this.storeName, id);
   }
 
   async clear() {

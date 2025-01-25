@@ -1,20 +1,22 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { type ExtractPageState, defaultState } from '@/types/frame-extraction';
-import { getSelectedFrames } from '@/utils/frame-selection';
 import { extractFramesInBrowser } from '@/lib/browserFrameExtraction';
 import { calculateSharpnessScore } from '@/lib/opencvUtils';
-import { frameStorage } from '@/lib/frameStorage';
-import { downloadAsZip, type FrameData } from '@/lib/zipUtils';
+import { type FrameData } from '@/types/frame';
 import { getVideoMetadata } from '@/lib/videoUtils';
+import { getSelectedFrames } from '@/utils/frame-selection';
+import JSZip from 'jszip';
 
 export function useFrameExtraction() {
-  const [state, setState] = useState<ExtractPageState>({
-    ...defaultState,
-    timeRange: [0, 0],
-  });
+  const [state, setState] = useState<ExtractPageState>(defaultState);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // State update helper with proper typing
+  const updateState = useCallback((updater: (prev: ExtractPageState) => ExtractPageState) => {
+    setState(updater);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -26,23 +28,26 @@ export function useFrameExtraction() {
   }, []);
 
   const handleVideoChange = useCallback(async (file: File) => {
+    if (!file) return;
+
     // Clean up previous video URL if it exists
     if (state.videoThumbnailUrl) {
       URL.revokeObjectURL(state.videoThumbnailUrl);
     }
 
-    setState(prev => ({
+    updateState(prev => ({
       ...prev,
       videoFile: file,
       loadingMetadata: true,
       error: null,
+      frames: [],
       videoThumbnailUrl: null,
       videoMetadata: null,
-      frames: [],
+      isImageMode: false,
     }));
 
     try {
-      setState(prev => ({ ...prev, loadingMetadata: true }));
+      updateState(prev => ({ ...prev, loadingMetadata: true }));
 
       // Create video URL for both thumbnail and video element
       const videoUrl = URL.createObjectURL(file);
@@ -75,7 +80,7 @@ export function useFrameExtraction() {
       // Get metadata using FFmpeg
       const metadata = await getVideoMetadata(file);
       
-      setState(prev => ({
+      updateState(prev => ({
         ...prev,
         videoMetadata: metadata,
         videoThumbnailUrl: videoUrl, 
@@ -88,37 +93,45 @@ export function useFrameExtraction() {
       video.remove();
     } catch (error) {
       console.error('Video load error:', error);
-      setState(prev => ({
+      updateState(prev => ({
         ...prev,
         error: `Failed to load video metadata: ${error}`,
         loadingMetadata: false,
       }));
     }
-  }, [state.videoFile, state.videoMetadata, state.fps, state.format, state.timeRange, state.prefix, state.useOriginalFrameRate]);
+  }, [state.videoThumbnailUrl, updateState]);
 
   const handleVideoReplace = useCallback(() => {
-    setState(prev => ({
+    if (state.videoThumbnailUrl) {
+      URL.revokeObjectURL(state.videoThumbnailUrl);
+    }
+    updateState(prev => ({
       ...prev,
-      showClearCacheDialog: true,
+      videoFile: null,
+      videoThumbnailUrl: null,
+      videoMetadata: null,
+      frames: [],
+      selectedFrames: new Set(),
+      isImageMode: false,
     }));
-  }, []);
+  }, [state.videoThumbnailUrl, updateState]); 
 
   const handleCancel = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-    setState(prev => ({
+    updateState(prev => ({
       ...prev,
       processing: false,
       extractionProgress: { current: 0, total: 0 },
       sharpnessProgress: { current: 0, total: 0 },
     }));
-  }, []);
+  }, [updateState]);
 
   const handleExtractFrames = useCallback(async () => {
     if (!state.videoFile || !state.videoMetadata) {
-      setState(prev => ({
+      updateState(prev => ({
         ...prev,
         error: 'No video file or metadata available',
       }));
@@ -126,7 +139,7 @@ export function useFrameExtraction() {
     }
 
     if (state.fps <= 0) {
-      setState(prev => ({
+      updateState(prev => ({
         ...prev,
         error: 'FPS must be greater than 0',
       }));
@@ -140,7 +153,7 @@ export function useFrameExtraction() {
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
 
-    setState(prev => ({
+    updateState(prev => ({
       ...prev,
       processing: true,
       error: null,
@@ -151,16 +164,16 @@ export function useFrameExtraction() {
 
     try {
       // Clear existing frames
-      await frameStorage.clear();
+      // await frameStorage.clear();
 
       // Extract frames with abort signal
-      const storedFrames = await extractFramesInBrowser(
+      const extractedFrames = await extractFramesInBrowser(
         state.videoFile,
         state.fps,
         state.format,
         state.timeRange,
         (current: number, total: number) => {
-          setState(prev => ({
+          updateState(prev => ({
             ...prev,
             extractionProgress: {
               current,
@@ -182,49 +195,42 @@ export function useFrameExtraction() {
         throw new DOMException('Aborted', 'AbortError');
       }
 
-      // Calculate sharpness scores
-      let processedFrames = 0;
-      const framesWithSharpness: FrameData[] = [];
-      for (const frame of storedFrames) {
-        if (signal.aborted) {
-          throw new DOMException('Aborted', 'AbortError');
-        }
+      // Create FrameData objects with initial sharpness scores
+      const frames = await Promise.all(
+        extractedFrames.map(async (frame, index) => {
+          const arrayBuffer = await frame.blob.arrayBuffer();
+          const data = new Uint8Array(arrayBuffer);
+          const sharpnessScore = await calculateSharpnessScore(frame.blob);
+          return {
+            id: frame.id,
+            name: frame.name,
+            format: frame.format,
+            sharpnessScore,
+            blob: frame.blob,
+            timestamp: (index / state.fps) * 1000, // Convert to milliseconds
+            data,
+            selected: false // Initialize selection state
+          } as FrameData;
+        })
+      );
 
-        const sharpnessScore = await calculateSharpnessScore(frame.blob);
-        framesWithSharpness.push({
-          ...frame,
-          sharpnessScore
-        });
-        processedFrames++;
-        
-        setState(prev => ({
-          ...prev,
-          sharpnessProgress: {
-            current: processedFrames,
-            total: storedFrames.length,
-            startTime: prev.sharpnessProgress.startTime || Date.now(),
-            estimatedTimeMs: prev.sharpnessProgress.startTime
-              ? ((Date.now() - prev.sharpnessProgress.startTime) / processedFrames) * (storedFrames.length - processedFrames)
-              : undefined,
-          },
-        }));
-      }
-
-      setState(prev => ({
+      // Update state with processed frames
+      updateState(prev => ({
         ...prev,
-        frames: framesWithSharpness,
+        frames,
         processing: false,
+        extractionProgress: { current: 0, total: 0 }
       }));
     } catch (error) {
       console.error('Error in frame extraction:', error);
       
       // Only set error if not aborted
       if (error instanceof DOMException && error.name === 'AbortError') {
-        await frameStorage.clear();
+        // await frameStorage.clear();
         return;
       }
 
-      setState(prev => ({
+      updateState(prev => ({
         ...prev,
         error: 'Failed to extract frames',
         processing: false,
@@ -232,35 +238,84 @@ export function useFrameExtraction() {
     } finally {
       abortControllerRef.current = null;
     }
-  }, [state.videoFile, state.videoMetadata, state.fps, state.format, state.timeRange, state.prefix, state.useOriginalFrameRate, state.videoThumbnailUrl]);
+  }, [state.videoFile, state.videoMetadata, state.fps, state.format, state.timeRange, state.prefix, state.useOriginalFrameRate, updateState]);
+
+  // Helper functions for selection logic
+  const isFrameSelectedByBatch = (frame: FrameData, frames: FrameData[], batchSize: number, batchBuffer: number): boolean => {
+    const index = frames.indexOf(frame);
+    const batchStart = Math.floor(index / (batchSize + batchBuffer)) * (batchSize + batchBuffer);
+    const batch = frames.slice(batchStart, batchStart + batchSize);
+    
+    // If frame is not in the current batch range, it's not selected
+    if (index < batchStart || index >= batchStart + batchSize) return false;
+    
+    // Find the sharpest frame in this batch
+    const sharpestFrame = batch.reduce((best, current) => 
+      (current.sharpnessScore || 0) > (best.sharpnessScore || 0) ? current : best
+    , batch[0]);
+    
+    // Frame is selected if it's the sharpest in its batch
+    return frame.id === sharpestFrame.id;
+  };
+
+  const handleToggleFrameSelection = useCallback((frameId: string) => {
+    updateState(prev => ({
+      ...prev,
+      frames: prev.frames.map(f => {
+        if (f.id === frameId) {
+          // Toggle manual selection regardless of auto-selection
+          return { ...f, selected: !f.selected };
+        }
+        return f;
+      })
+    }));
+  }, [updateState]);
 
   const handleDownload = useCallback(async () => {
+    // Get selected frames using the utility function
     const selectedFrames = getSelectedFrames(state);
+
     if (selectedFrames.length === 0) {
-      setState(prev => ({
-        ...prev,
-        error: 'No frames selected for download'
-      }));
+      console.error('No frames selected for download');
       return;
     }
 
     try {
-      await downloadAsZip(selectedFrames);
+      const zip = new JSZip();
+      
+      // Add selected frames to zip
+      selectedFrames.forEach(frame => {
+        if (frame.blob) {
+          zip.file(frame.name, frame.blob);
+        }
+      });
+
+      // Generate and download zip
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'selected-frames.zip';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (error) {
-      setState(prev => ({
+      console.error('Error downloading frames:', error);
+      updateState(prev => ({
         ...prev,
-        error: `Failed to download frames: ${error}`
+        error: 'Failed to download frames'
       }));
     }
-  }, [state]);
+  }, [state, updateState]);
 
   const handleClearCache = useCallback(async () => {
     try {
       if (state.videoThumbnailUrl) {
         URL.revokeObjectURL(state.videoThumbnailUrl);
       }
-      await frameStorage.clear();
-      setState(prev => ({
+      // await frameStorage.clear();
+      updateState(prev => ({
         ...defaultState,
         selectionMode: prev.selectionMode,
         percentageThreshold: prev.percentageThreshold,
@@ -269,24 +324,140 @@ export function useFrameExtraction() {
         timeRange: [0, 0],
       }));
     } catch (error) {
-      setState(prev => ({
+      updateState(prev => ({
         ...prev,
         error: `Failed to clear cache: ${error}`,
         showClearCacheDialog: false,
       }));
     }
-  }, [state.videoThumbnailUrl]);
+  }, [state.videoThumbnailUrl, updateState]);
+
+  const handleImageDirectoryChange = useCallback(async (files: FileList) => {
+    updateState(prev => ({
+      ...prev,
+      loadingMetadata: true,
+      error: null,
+      frames: [],
+      isImageMode: true,
+    }));
+
+    try {
+      // Filter for image files only
+      const imageFiles = Array.from(files).filter(file => {
+        const extension = file.name.split('.').pop()?.toLowerCase() || '';
+        return ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(extension);
+      });
+
+      if (imageFiles.length === 0) {
+        throw new Error('No valid image files found in the selected directory');
+      }
+
+      // Convert images to FrameData format
+      const frames = await Promise.all(
+        imageFiles.map(async (file, index) => {
+          const sharpnessScore = await calculateSharpnessScore(file);
+          return {
+            id: `frame-${index}`,
+            name: file.name,
+            format: file.name.split('.').pop() || 'jpeg',
+            sharpnessScore,
+            blob: file,
+            timestamp: index * 1000, // Arbitrary timestamp for images
+            data: new Uint8Array(await file.arrayBuffer())
+          } as FrameData;
+        })
+      );
+
+      updateState(prev => ({
+        ...prev,
+        frames,
+        loadingMetadata: false,
+      }));
+    } catch (error) {
+      console.error('Image processing error:', error);
+      updateState(prev => ({
+        ...prev,
+        error: `Failed to process images: ${error}`,
+        loadingMetadata: false,
+      }));
+    }
+  }, [updateState]);
+
+  const handleSelectAll = useCallback(() => {
+    updateState(prev => ({
+      ...prev,
+      frames: prev.frames.map(frame => ({
+        ...frame,
+        selected: true
+      }))
+    }));
+  }, [updateState]);
+
+  const handleDeselectAll = useCallback(() => {
+    updateState(prev => ({
+      ...prev,
+      frames: prev.frames.map(frame => ({
+        ...frame,
+        selected: false
+      }))
+    }));
+  }, [updateState]);
+
+  const handleSelectionModeChange = useCallback((mode: 'batched' | 'manual' | 'best-n') => {
+    updateState(prev => ({
+      ...prev,
+      selectionMode: mode,
+      frames: prev.frames.map(f => ({ ...f, selected: false }))
+    }));
+  }, [updateState]);
+
+  const handleBatchSizeChange = useCallback((size: number) => {
+    updateState(prev => ({
+      ...prev,
+      batchSize: size,
+      frames: prev.frames.map(f => {
+        // Preserve manual selections, reset automatic ones
+        const isManuallySelected = f.selected && !isFrameSelectedByBatch(f, prev.frames, prev.batchSize, prev.batchBuffer);
+        return { 
+          ...f, 
+          selected: isManuallySelected || isFrameSelectedByBatch(f, prev.frames, size, prev.batchBuffer)
+        };
+      })
+    }));
+  }, [updateState]);
+
+  const handleBatchBufferChange = useCallback((buffer: number) => {
+    updateState(prev => ({
+      ...prev,
+      batchBuffer: buffer,
+      frames: prev.frames.map(f => {
+        // Preserve manual selections, reset automatic ones
+        const isManuallySelected = f.selected && !isFrameSelectedByBatch(f, prev.frames, prev.batchSize, prev.batchBuffer);
+        return { 
+          ...f, 
+          selected: isManuallySelected || isFrameSelectedByBatch(f, prev.frames, prev.batchSize, buffer)
+        };
+      })
+    }));
+  }, [updateState]);
 
   return {
     state,
+    setState: updateState,
     handlers: {
       handleVideoChange,
       handleVideoReplace,
+      handleImageDirectoryChange,
       handleExtractFrames,
-      handleDownload,
       handleCancel,
+      handleDownload,
       handleClearCache,
-      setState,
+      handleSelectAll,
+      handleDeselectAll,
+      handleToggleFrameSelection,
+      handleSelectionModeChange,
+      handleBatchSizeChange,
+      handleBatchBufferChange,
     },
   };
 }

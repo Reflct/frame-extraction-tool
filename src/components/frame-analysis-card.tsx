@@ -4,40 +4,40 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FrameSelection } from '@/components/frame-selection';
 import { FrameAnalysis } from '@/components/frame-analysis';
-import { type FrameData } from '@/lib/zipUtils';
+import { type FrameData } from '@/types/frame';
 
 interface FrameAnalysisCardProps {
   frames: FrameData[];
   selectedFrames: FrameData[];
   showFrames: boolean;
-  processing: boolean;
-  selectionMode: 'percentage' | 'batched';
-  percentageThreshold: number;
   batchSize: number;
   batchBuffer: number;
-  onSelectionModeChangeAction: (mode: 'percentage' | 'batched') => void;
-  onPercentageThresholdChangeAction: (value: number) => void;
+  bestNCount: number;
+  bestNMinGap: number;
+  onSelectionModeChangeAction: (mode: 'batched' | 'manual' | 'best-n') => void;
   onBatchSizeChangeAction: (size: number) => void;
   onBatchBufferChangeAction: (buffer: number) => void;
+  onBestNCountChangeAction: (count: number) => void;
+  onBestNMinGapChangeAction: (gap: number) => void;
   onToggleFramesAction: () => void;
-  onDownloadAction: () => void;
+  onToggleFrameSelectionAction: (frameId: string) => void;
 }
 
 export function FrameAnalysisCard({
   frames,
   selectedFrames,
   showFrames,
-  processing,
-  selectionMode,
-  percentageThreshold,
   batchSize,
   batchBuffer,
+  bestNCount,
+  bestNMinGap,
   onSelectionModeChangeAction,
-  onPercentageThresholdChangeAction,
   onBatchSizeChangeAction,
   onBatchBufferChangeAction,
+  onBestNCountChangeAction,
+  onBestNMinGapChangeAction,
   onToggleFramesAction,
-  onDownloadAction
+  onToggleFrameSelectionAction
 }: FrameAnalysisCardProps) {
   if (frames.length === 0) return null;
 
@@ -59,27 +59,27 @@ export function FrameAnalysisCard({
             {/* Selection Controls */}
             <div className="space-y-4">
               <FrameSelection
-                selectionMode={selectionMode}
-                percentageThreshold={percentageThreshold}
                 batchSize={batchSize}
                 batchBuffer={batchBuffer}
+                bestNCount={bestNCount}
+                bestNMinGap={bestNMinGap}
                 onSelectionModeChangeAction={onSelectionModeChangeAction}
-                onPercentageThresholdChangeAction={onPercentageThresholdChangeAction}
                 onBatchSizeChangeAction={onBatchSizeChangeAction}
                 onBatchBufferChangeAction={onBatchBufferChangeAction}
-                processing={processing}
+                onBestNCountChangeAction={onBestNCountChangeAction}
+                onBestNMinGapChangeAction={onBestNMinGapChangeAction}
               />
             </div>
 
             {/* Frame Analysis */}
-            <FrameAnalysis
-              frames={frames}
-              selectedFrames={selectedFrames}
-              showFrames={showFrames}
-              processing={processing}
-              onDownloadAction={onDownloadAction}
-              onToggleFramesAction={onToggleFramesAction}
-            />
+            <Card className="p-6">
+              <FrameAnalysis
+                frames={frames}
+                selectedFrames={new Set(selectedFrames.map(f => f.id))}
+                onFrameSelectAction={(frameId) => onToggleFrameSelectionAction(frameId)}
+                showImageGrid={showFrames}
+              />
+            </Card>
           </div>
         </div>
       </Card>

@@ -11,7 +11,7 @@ import { useFrameExtraction } from '@/hooks/use-frame-extraction';
 import { getSelectedFrames, getSelectedFramesCount } from '@/utils/frame-selection';
 
 export default function ExtractPage() {
-  const { state, handlers } = useFrameExtraction();
+  const { state, setState, handlers } = useFrameExtraction();
   const videoRef = useRef<HTMLVideoElement | null>(null) as React.RefObject<HTMLVideoElement>;
 
   return (
@@ -29,11 +29,14 @@ export default function ExtractPage() {
           loadingMetadata={state.loadingMetadata}
           onVideoChangeAction={handlers.handleVideoChange}
           onVideoReplaceAction={handlers.handleVideoReplace}
+          onImageDirectoryChangeAction={handlers.handleImageDirectoryChange}
           videoRef={videoRef}
+          isImageMode={state.isImageMode}
+          imageCount={state.frames.length}
         />
 
         {/* Extraction Settings Card */}
-        {state.videoMetadata && (
+        {state.videoMetadata && !state.isImageMode && (
           <ExtractionSettingsCard
             videoMetadata={state.videoMetadata}
             fps={state.fps}
@@ -45,11 +48,11 @@ export default function ExtractPage() {
             sharpnessProgress={state.sharpnessProgress}
             timeRange={state.timeRange}
             videoRef={videoRef}
-            onFpsChangeAction={(fps) => handlers.setState(prev => ({ ...prev, fps }))}
-            onFormatChangeAction={(format) => handlers.setState(prev => ({ ...prev, format }))}
-            onPrefixChangeAction={(prefix) => handlers.setState(prev => ({ ...prev, prefix }))}
-            onUseOriginalFrameRateChangeAction={(value) => handlers.setState(prev => ({ ...prev, useOriginalFrameRate: value }))}
-            onTimeRangeChangeAction={(range) => handlers.setState(prev => ({ ...prev, timeRange: range }))}
+            onFpsChangeAction={(fps) => setState(prev => ({ ...prev, fps }))}
+            onFormatChangeAction={(format) => setState(prev => ({ ...prev, format }))}
+            onPrefixChangeAction={(prefix) => setState(prev => ({ ...prev, prefix }))}
+            onUseOriginalFrameRateChangeAction={(value) => setState(prev => ({ ...prev, useOriginalFrameRate: value }))}
+            onTimeRangeChangeAction={(range) => setState(prev => ({ ...prev, timeRange: range }))}
             onExtractAction={handlers.handleExtractFrames}
             onCancelAction={handlers.handleCancel}
           />
@@ -64,23 +67,23 @@ export default function ExtractPage() {
         frames={state.frames}
         selectedFrames={getSelectedFrames(state)}
         showFrames={state.showFrames}
-        processing={state.processing}
-        selectionMode={state.selectionMode}
-        percentageThreshold={state.percentageThreshold}
         batchSize={state.batchSize}
         batchBuffer={state.batchBuffer}
-        onSelectionModeChangeAction={(mode) => handlers.setState(prev => ({ ...prev, selectionMode: mode }))}
-        onPercentageThresholdChangeAction={(value) => handlers.setState(prev => ({ ...prev, percentageThreshold: value }))}
-        onBatchSizeChangeAction={(size) => handlers.setState(prev => ({ ...prev, batchSize: size }))}
-        onBatchBufferChangeAction={(buffer) => handlers.setState(prev => ({ ...prev, batchBuffer: buffer }))}
-        onToggleFramesAction={() => handlers.setState(prev => ({ ...prev, showFrames: !prev.showFrames }))}
-        onDownloadAction={handlers.handleDownload}
+        bestNCount={state.bestNCount}
+        bestNMinGap={state.bestNMinGap}
+        onSelectionModeChangeAction={handlers.handleSelectionModeChange}
+        onBatchSizeChangeAction={handlers.handleBatchSizeChange}
+        onBatchBufferChangeAction={handlers.handleBatchBufferChange}
+        onBestNCountChangeAction={(count) => setState(prev => ({ ...prev, bestNCount: count }))}
+        onBestNMinGapChangeAction={(gap) => setState(prev => ({ ...prev, bestNMinGap: gap }))}
+        onToggleFramesAction={() => setState(prev => ({ ...prev, showFrames: !prev.showFrames }))}
+        onToggleFrameSelectionAction={handlers.handleToggleFrameSelection}
       />
 
       {/* Clear Cache Dialog */}
       <ClearCacheDialog
         open={state.showClearCacheDialog}
-        onOpenChangeAction={(open: boolean) => handlers.setState(prev => ({ ...prev, showClearCacheDialog: open }))}
+        onOpenChangeAction={(open: boolean) => setState(prev => ({ ...prev, showClearCacheDialog: open }))}
         onConfirmAction={handlers.handleClearCache}
         frameCount={state.frames.length}
       />

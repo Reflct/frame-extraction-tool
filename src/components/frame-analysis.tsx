@@ -1,75 +1,76 @@
 'use client';
 
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BarChart, Bar, YAxis, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
-import { Download } from "lucide-react";
-import { type FrameData } from '@/lib/zipUtils';
-import { type FrameMetadata } from '@/types/frame';
+import { type FrameData, type FrameMetadata } from '@/types/frame';
 import Image from 'next/image';
 import { FramePreviewDialog } from './frame-preview-dialog';
-
-interface ChartData {
-  name: string;
-  sharpnessScore: number;
-  selected: boolean;
-  frame: FrameData;
-}
+import { createPortal } from 'react-dom';
 
 interface FrameAnalysisProps {
   frames: FrameData[];
-  selectedFrames: FrameData[];
-  showFrames: boolean;
-  processing: boolean;
-  onDownloadAction: () => void;
-  onToggleFramesAction: () => void;
-}
-
-function getChartData(frames: FrameData[], selectedFrames: FrameData[]): ChartData[] {
-  return frames.map((frame) => {
-    const frameNumber = frame.name?.match(/frame_(\d+)/)?.[1] || frame.name || 'unknown';
-    return {
-      name: frameNumber,
-      sharpnessScore: frame.sharpnessScore ?? 0,
-      selected: selectedFrames.includes(frame),
-      frame,
-    };
-  });
+  selectedFrames: Set<string>;
+  onFrameSelectAction: (frameId: string) => void;
+  showImageGrid?: boolean;
 }
 
 export function FrameAnalysis({
   frames,
   selectedFrames,
-  showFrames,
-  processing,
-  onDownloadAction,
-  onToggleFramesAction
+  onFrameSelectAction,
+  showImageGrid = true,
 }: FrameAnalysisProps) {
   const [selectedFrame, setSelectedFrame] = useState<FrameData | null>(null);
+  const [hoveredFrame, setHoveredFrame] = useState<FrameData | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [frameData, setFrameData] = useState<Record<string, Uint8Array>>({});
   const convertingRef = useRef<Record<string, boolean>>({});
+  const [frameUrls, setFrameUrls] = useState<Map<string, string>>(new Map());
 
-  // Sort frames by frame number
-  const sortedFrames = useMemo(() => {
-    return [...frames].sort((a, b) => {
-      const aNum = parseInt(a.name.match(/frame_(\d+)/)?.[1] || '0');
-      const bNum = parseInt(b.name.match(/frame_(\d+)/)?.[1] || '0');
-      return aNum - bNum;
+  // Create blob URLs when frames change
+  useEffect(() => {
+    const newUrls = new Map<string, string>();
+    
+    frames.forEach(frame => {
+      if (frame.blob) {
+        const url = URL.createObjectURL(frame.blob);
+        newUrls.set(frame.id, url);
+      }
     });
+
+    setFrameUrls(newUrls);
+
+    // Cleanup old blob URLs on unmount
+    return () => {
+      newUrls.forEach(url => URL.revokeObjectURL(url));
+    };
   }, [frames]);
 
-  const chartData = getChartData(sortedFrames, selectedFrames);
-  const selectedCount = selectedFrames.length;
+  // Get blob URL for a frame
+  const getFrameUrl = useCallback((frameId: string) => {
+    return frameUrls.get(frameId) || null;
+  }, [frameUrls]);
 
-  // Calculate Y-axis domain with some padding
-  const maxScore = Math.max(...chartData.map(d => d.sharpnessScore));
-  const minScore = Math.min(...chartData.map(d => d.sharpnessScore));
-  const padding = (maxScore - minScore) * 0.1; // 10% padding
-  const yDomain = [
-    Math.max(0, minScore - padding),
-    Math.min(100, maxScore + padding)
-  ];
+  // Render frame thumbnail component
+  const FrameThumbnail = useCallback(({ frame }: { frame: FrameData }) => {
+    const url = getFrameUrl(frame.id);
+    if (!url) return null;
+
+    return (
+      <div className="relative w-full h-full">
+        <Image
+          src={url}
+          alt={`Frame ${frame.id}`}
+          fill
+          className="object-cover"
+          sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 16vw"
+          priority={true}
+        />
+      </div>
+    );
+  }, [getFrameUrl]);
 
   // Convert Blob to Uint8Array
   const convertBlobToUint8Array = useCallback(async (frame: FrameData): Promise<void> => {
@@ -85,135 +86,140 @@ export function FrameAnalysis({
     }
   }, [frameData]);
 
-  // Handle frame change
-  const handleFrameChange = useCallback(async (frame: FrameMetadata) => {
-    const newFrame = sortedFrames.find(f => f.name === frame.id);
-    if (newFrame) {
-      await convertBlobToUint8Array(newFrame);
-      setSelectedFrame(newFrame);
+  // Navigation handlers
+  const handleNext = useCallback((frame: FrameMetadata) => {
+    const currentIndex = frames.findIndex(f => f.id === frame.id);
+    if (currentIndex < frames.length - 1) {
+      const nextFrame = frames[currentIndex + 1];
+      setSelectedFrame(nextFrame);
     }
-  }, [sortedFrames, convertBlobToUint8Array]);
+  }, [frames]);
 
-  // Handle bar click to open preview
-  const handleBarClick = useCallback(async (data: ChartData) => {
-    setSelectedFrame(data.frame);
-    setIsPreviewOpen(true);
-    await convertBlobToUint8Array(data.frame);
-  }, [convertBlobToUint8Array]);
-
-  // Create frame metadata
-  const createFrameMetadata = useCallback((frame: FrameData): FrameMetadata | null => {
-    if (!frameData[frame.name]) {
-      // Start conversion if not already done
-      convertBlobToUint8Array(frame);
-      return null;
+  const handlePrevious = useCallback((frame: FrameMetadata) => {
+    const currentIndex = frames.findIndex(f => f.id === frame.id);
+    if (currentIndex > 0) {
+      const prevFrame = frames[currentIndex - 1];
+      setSelectedFrame(prevFrame);
     }
-    return {
-      id: frame.name,
-      name: frame.name,
-      timestamp: parseInt(frame.name.match(/frame_(\d+)/)?.[1] || '0'),
-      format: 'jpeg',
-      sharpnessScore: frame.sharpnessScore,
-      data: frameData[frame.name]
+  }, [frames]);
+
+  // Handle keyboard events
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (!hoveredFrame || !onFrameSelectAction) return;
+
+      if (e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        onFrameSelectAction(hoveredFrame.id);
+      }
     };
-  }, [frameData, convertBlobToUint8Array]);
 
-  // Convert sorted frames to metadata
-  const frameMetadata = useMemo(() => 
-    sortedFrames
-      .map(createFrameMetadata)
-      .filter((f): f is FrameMetadata => f !== null),
-    [sortedFrames, createFrameMetadata]
-  );
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [hoveredFrame, onFrameSelectAction]);
 
   return (
     <div className="space-y-4">
-      {/* Chart Header */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Frame Analysis</h3>
           <p className="text-sm text-[#111214]/35">
-            {frames.length} frames analyzed, {selectedCount} selected
+            {frames.length} frames analyzed
           </p>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={onToggleFramesAction}
-            disabled={processing || frames.length === 0}
+            onClick={() => {
+              frames.forEach(frame => onFrameSelectAction(frame.id));
+            }}
           >
-            {showFrames ? 'Hide' : 'Show'} Frames
+            Select All
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={onDownloadAction}
-            disabled={processing || selectedCount === 0}
+            onClick={() => {
+              Array.from(selectedFrames).forEach(frameId => onFrameSelectAction(frameId));
+            }}
           >
-            <Download className="mr-2 h-4 w-4" />
-            Download {selectedCount} {selectedCount === 1 ? 'Frame' : 'Frames'}
+            Deselect All
           </Button>
         </div>
       </div>
 
-      {/* Blur Score Chart */}
-      {frames.length > 0 && (
-        <div className="w-full overflow-x-auto">
-          <div style={{ width: Math.max(frames.length * 8, 300), height: 200 }}>
+      {/* Histogram */}
+      <div className="relative h-[300px] w-full overflow-hidden">
+        <div 
+          className="h-full overflow-x-auto"
+          style={{ 
+            width: '100%'
+          }}
+        >
+          <div style={{ 
+            width: `${Math.max(frames.length * 8, 100)}px`,
+            height: '100%'
+          }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} onClick={(data) => data && handleBarClick(data.activePayload?.[0]?.payload)}>
-                <XAxis 
-                  dataKey="name" 
-                  tick={false}
-                  label={{ 
-                    value: 'Frames', 
-                    position: 'bottom',
-                    style: { fontSize: 12, fill: '#111214' }
-                  }}
-                />
+              <BarChart
+                data={frames.map((frame, index) => ({
+                  x: index,
+                  y: frame.sharpnessScore || 0,
+                  frame
+                }))}
+                onMouseMove={(state) => {
+                  if (state?.activePayload?.[0]?.payload) {
+                    const data = state.activePayload[0].payload as { frame: FrameData };
+                    setHoveredFrame(data.frame);
+                    if (state.chartX && state.chartY) {
+                      const chartElement = document.querySelector('.recharts-wrapper');
+                      if (chartElement) {
+                        const rect = chartElement.getBoundingClientRect();
+                        setTooltipPosition({
+                          x: rect.left + state.chartX,
+                          y: rect.top + state.chartY
+                        });
+                      }
+                    }
+                  }
+                }}
+                onMouseLeave={() => {
+                  setHoveredFrame(null);
+                  setTooltipPosition(null);
+                }}
+                margin={{ left: 40 }}
+              >
                 <YAxis 
-                  domain={[Math.floor(yDomain[0]), Math.ceil(yDomain[1])]}
-                  tickFormatter={(value) => Math.round(value).toString()}
-                  tick={{ fontSize: 12, fill: '#111214' }}
-                  label={{ 
-                    value: 'Sharpness', 
-                    angle: -90, 
-                    position: 'insideLeft',
-                    style: { fontSize: 12, fill: '#111214' }
-                  }}
+                  tickFormatter={(value) => value.toFixed(1)} 
+                  width={40}
+                  stroke="#9CA3AF"
+                />
+                <XAxis 
+                  hide={true}
+                  axisLine={{ stroke: '#E5E7EB' }}
                 />
                 <Tooltip
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload as ChartData;
-                      return (
-                        <div className="bg-white p-2 border rounded shadow-lg">
-                          <div className="mb-2 relative w-[160px] h-[90px]">
-                            <Image
-                              src={URL.createObjectURL(data.frame.blob)}
-                              alt={`Frame ${data.name}`}
-                              fill
-                              className="object-cover rounded"
-                            />
-                          </div>
-                          <p className="text-sm font-medium text-[#111214]">Frame {data.name}</p>
-                          <p className="text-sm text-[#111214]/35">Sharpness: {data.sharpnessScore.toFixed(2)}</p>
-                          <p className="text-sm text-[#111214]/35">
-                            {data.selected ? 'Selected' : 'Not Selected'}
-                          </p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
+                  cursor={{ fill: 'rgba(0, 102, 255, 0.1)' }}
+                  content={() => null}
                 />
-                <Bar dataKey="sharpnessScore" style={{ cursor: 'pointer' }}>
-                  {chartData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.selected ? '#2563eb' : '#111214'}
-                      fillOpacity={entry.selected ? 1 : 0.35}
+                <Bar 
+                  dataKey="y" 
+                  onClick={(data) => {
+                    const frame = (data as unknown as { frame: FrameData }).frame;
+                    if (frame) {
+                      setSelectedFrame(frame);
+                      setIsPreviewOpen(true);
+                      convertBlobToUint8Array(frame);
+                    }
+                  }}
+                  cursor="pointer"
+                >
+                  {frames.map((frame, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={selectedFrames.has(frame.id) ? '#0066FF' : '#E5E7EB'}
+                      className="cursor-pointer hover:opacity-80"
                     />
                   ))}
                 </Bar>
@@ -221,47 +227,72 @@ export function FrameAnalysis({
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
+
+      {hoveredFrame && tooltipPosition && createPortal(
+        <div 
+          className="bg-white p-3 border rounded-lg shadow-lg fixed"
+          style={{
+            transform: 'translate(-50%, -100%)',
+            left: tooltipPosition.x,
+            top: tooltipPosition.y - 16,
+            pointerEvents: 'none',
+            zIndex: 9999
+          }}
+        >
+          <div className="relative w-48 aspect-video mb-2 rounded-md overflow-hidden">
+            {getFrameUrl(hoveredFrame.id) && (
+              <Image
+                src={getFrameUrl(hoveredFrame.id)!}
+                alt={hoveredFrame.name}
+                fill
+                className="object-cover"
+                sizes="192px"
+              />
+            )}
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{hoveredFrame.name}</p>
+            <p className="text-sm text-muted-foreground">
+              Sharpness: {hoveredFrame.sharpnessScore?.toFixed(1)}
+            </p>
+          </div>
+        </div>,
+        document.body
       )}
 
-      {/* Frame Preview Dialog */}
+      {/* Section Title */}
+      {showImageGrid && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold">Selected frames</h3>
+          </div>
+        </div>
+      )}
+
+      {/* Image Grid */}
+      {showImageGrid && (
+        <div className="grid grid-cols-6 gap-4">
+          {frames.filter(frame => selectedFrames.has(frame.id)).map((frame) => (
+            <div 
+              key={frame.id} 
+              className="relative aspect-video rounded-md overflow-hidden border border-gray-200"
+            >
+              <FrameThumbnail frame={frame} />
+            </div>
+          ))}
+        </div>
+      )}
+
       <FramePreviewDialog
         open={isPreviewOpen}
         onOpenChangeAction={setIsPreviewOpen}
-        frame={selectedFrame ? createFrameMetadata(selectedFrame) : null}
-        frames={frameMetadata}
-        isSelected={selectedFrame ? selectedFrames.includes(selectedFrame) : false}
-        onFrameChangeAction={handleFrameChange}
+        frame={selectedFrame}
+        isSelected={selectedFrame ? selectedFrames.has(selectedFrame.id) : undefined}
+        onToggleSelection={selectedFrame ? () => onFrameSelectAction(selectedFrame.id) : undefined}
+        onNext={handleNext}
+        onPrevious={handlePrevious}
       />
-
-      {/* Frame Grid */}
-      {showFrames && selectedFrames.length > 0 && (
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-          {selectedFrames.map((frame, index) => {
-            return (
-              <div
-                key={frame.name || index}
-                className="relative aspect-video rounded-lg overflow-hidden border-2 border-blue-500"
-              >
-                <Image
-                  src={URL.createObjectURL(frame.blob)}
-                  alt={`Frame ${frame.name || index}`}
-                  width={320}
-                  height={180}
-                  className="object-cover w-full h-full"
-                  sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 16vw"
-                  priority={false}
-                  loading="lazy"
-                  unoptimized={false}
-                />
-                <div className="absolute bottom-0 left-0 right-0 bg-[#111214]/50 text-white text-xs p-1">
-                  <div>Frame: {frame.name?.match(/frame_(\d+)/)?.[1] || frame.name || index}</div>
-                  <div>Sharpness: {frame.sharpnessScore?.toFixed(2) ?? 'N/A'}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
