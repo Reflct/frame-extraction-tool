@@ -352,6 +352,9 @@ export function useFrameExtraction() {
         throw new Error('No valid image files found in the selected directory');
       }
 
+      // Sort image files alphabetically by name
+      imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
       // Convert images to FrameData format
       const frames = await Promise.all(
         imageFiles.map(async (file, index) => {
