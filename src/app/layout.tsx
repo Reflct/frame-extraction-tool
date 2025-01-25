@@ -10,14 +10,14 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Frame Extractor - Reflct",
-  description: "Extract clear frames from videos with precision. A powerful web-based tool for video frame extraction.",
+  title: "Sharp Frames Tool",
+  description: "Extract clear frames from videos or image directories with precision. A powerful web-based tool for video frame extraction and image analysis.",
   icons: {
     icon: "/Favicon-reflct.png",
   },
   openGraph: {
-    title: "Frame Extractor - Reflct",
-    description: "Extract clear frames from videos with precision. A powerful web-based tool for video frame extraction.",
+    title: "Sharp Frames Tool",
+    description: "Extract clear frames from videos or image directories with precision. A powerful web-based tool for video frame extraction and image analysis.",
     type: "website",
     images: [
       {
@@ -26,8 +26,8 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    title: "Frame Extractor - Reflct",
-    description: "Extract clear frames from videos with precision. A powerful web-based tool for video frame extraction.",
+    title: "Sharp Frames Tool",
+    description: "Extract clear frames from videos or image directories with precision. A powerful web-based tool for video frame extraction and image analysis.",
     card: "summary_large_image",
     images: ["/Reflct-og.jpg"],
   },

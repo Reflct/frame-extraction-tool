@@ -33,6 +33,7 @@ export default function ExtractPage() {
           videoRef={videoRef}
           isImageMode={state.isImageMode}
           imageCount={state.frames.length}
+          extractionProgress={state.extractionProgress}
         />
 
         {/* Extraction Settings Card */}

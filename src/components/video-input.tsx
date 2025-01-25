@@ -17,6 +17,7 @@ interface VideoInputProps {
   onImageDirectoryChangeAction?: (files: FileList) => Promise<void>;
   isImageMode?: boolean;
   imageCount?: number;
+  extractionProgress?: { current: number; total: number };
 }
 
 export const VideoInput: React.FC<VideoInputProps> = ({
@@ -30,6 +31,7 @@ export const VideoInput: React.FC<VideoInputProps> = ({
   onImageDirectoryChangeAction,
   isImageMode = false,
   imageCount = 0,
+  extractionProgress,
 }) => {
   const openFileSelector = () => {
     if (loadingMetadata) return;
@@ -145,6 +147,21 @@ export const VideoInput: React.FC<VideoInputProps> = ({
             <div className="flex flex-col space-y-2">
               <h3 className="text-lg font-semibold">Image Directory</h3>
               <p className="text-sm text-gray-500">{imageCount} images loaded</p>
+              {extractionProgress && extractionProgress.total > 0 && (
+                <div className="space-y-2">
+                  <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 transition-all duration-300"
+                      style={{ 
+                        width: `${(extractionProgress.current / extractionProgress.total) * 100}%` 
+                      }}
+                    />
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    Processing {extractionProgress.current} of {extractionProgress.total} images
+                  </p>
+                </div>
+              )}
               <Button
                 variant="outline"
                 onClick={onVideoReplaceAction}

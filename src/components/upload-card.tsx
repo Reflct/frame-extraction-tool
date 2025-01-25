@@ -16,6 +16,7 @@ interface UploadCardProps {
   onImageDirectoryChangeAction?: (files: FileList) => Promise<void>;
   isImageMode?: boolean;
   imageCount?: number;
+  extractionProgress?: { current: number; total: number };
 }
 
 export function UploadCard({
@@ -29,6 +30,7 @@ export function UploadCard({
   onImageDirectoryChangeAction,
   isImageMode = false,
   imageCount = 0,
+  extractionProgress,
 }: UploadCardProps) {
   const handleImageDirectoryChange = useCallback(async (files: FileList) => {
     if (!files || files.length === 0) return;
@@ -49,6 +51,7 @@ export function UploadCard({
           onImageDirectoryChangeAction={handleImageDirectoryChange}
           isImageMode={isImageMode}
           imageCount={imageCount}
+          extractionProgress={extractionProgress}
         />
       </div>
     </Card>
