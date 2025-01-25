@@ -332,59 +332,125 @@ export function useFrameExtraction() {
     }
   }, [state.videoThumbnailUrl, updateState]);
 
-  const handleImageDirectoryChange = useCallback(async (files: FileList) => {
-    updateState(prev => ({
-      ...prev,
-      loadingMetadata: true,
-      error: null,
-      frames: [],
-      isImageMode: true,
-    }));
+  const handleImageDirectoryChange = useCallback(
+    async (files: FileList) => {
+      console.log('Starting image directory processing...', { fileCount: files.length });
+      
+      updateState(prev => ({
+        ...prev,
+        loadingMetadata: true,
+        error: null,
+        frames: [],
+        isImageMode: true,
+      }));
 
-    try {
-      // Filter for image files only
-      const imageFiles = Array.from(files).filter(file => {
-        const extension = file.name.split('.').pop()?.toLowerCase() || '';
-        return ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(extension);
-      });
+      try {
+        // Filter for image files only
+        const imageFiles = Array.from(files).filter(file => {
+          const extension = file.name.split('.').pop()?.toLowerCase() || '';
+          return ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(extension);
+        });
 
-      if (imageFiles.length === 0) {
-        throw new Error('No valid image files found in the selected directory');
+        console.log('Filtered image files:', { 
+          totalFiles: files.length,
+          imageFiles: imageFiles.length,
+          firstFewNames: imageFiles.slice(0, 3).map(f => f.name)
+        });
+
+        if (imageFiles.length === 0) {
+          throw new Error('No valid image files found in the selected directory');
+        }
+
+        // Sort image files alphabetically by name
+        imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        console.log('Sorted image files, beginning batch processing...');
+
+        const frames: FrameData[] = [];
+        const BATCH_SIZE = 10; // Process 10 images at a time to manage memory
+        
+        for (let i = 0; i < imageFiles.length; i += BATCH_SIZE) {
+          console.log(`Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(imageFiles.length/BATCH_SIZE)}...`);
+          
+          try {
+            const batch = imageFiles.slice(i, i + BATCH_SIZE);
+            console.log('Current batch:', { 
+              batchNumber: Math.floor(i/BATCH_SIZE) + 1,
+              batchSize: batch.length,
+              fileNames: batch.map(f => f.name)
+            });
+
+            const batchFrames = await Promise.all(
+              batch.map(async (file, batchIndex) => {
+                console.log(`Processing file ${file.name}...`);
+                const arrayBuffer = await file.arrayBuffer();
+                console.log(`Got array buffer for ${file.name}, size: ${arrayBuffer.byteLength} bytes`);
+                
+                const data = new Uint8Array(arrayBuffer);
+                console.log(`Converting ${file.name} to frame data...`);
+                
+                const sharpnessScore = await calculateSharpnessScore(file);
+                console.log(`Calculated sharpness score for ${file.name}: ${sharpnessScore}`);
+                
+                return {
+                  id: `frame-${i + batchIndex}`,
+                  name: file.name,
+                  format: file.name.split('.').pop() || 'jpeg',
+                  sharpnessScore,
+                  blob: file,
+                  timestamp: (i + batchIndex) * 1000,
+                  data
+                } as FrameData;
+              })
+            );
+            
+            console.log(`Successfully processed batch ${Math.floor(i/BATCH_SIZE) + 1}, adding ${batchFrames.length} frames`);
+            frames.push(...batchFrames);
+            
+            // Update progress
+            updateState(prev => ({
+              ...prev,
+              extractionProgress: {
+                current: Math.min(i + BATCH_SIZE, imageFiles.length),
+                total: imageFiles.length,
+                startTime: prev.extractionProgress.startTime || Date.now(),
+              }
+            }));
+          } catch (error) {
+            console.error('Error processing batch:', error);
+            if (error instanceof Error && error.message.includes('memory')) {
+              throw new Error(`Browser memory limit reached after processing ${frames.length} images. Please reduce the number of images or their size.`);
+            }
+            throw error;
+          }
+        }
+
+        console.log('Finished processing all images:', { 
+          totalProcessed: frames.length,
+          totalMemoryUsage: frames.reduce((sum, frame) => sum + (frame.data?.byteLength || 0), 0)
+        });
+
+        updateState(prev => ({
+          ...prev,
+          frames,
+          loadingMetadata: false,
+          extractionProgress: { current: 0, total: 0 },
+        }));
+      } catch (error) {
+        console.error('Image processing error:', { 
+          error,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          errorStack: error instanceof Error ? error.stack : undefined
+        });
+        
+        updateState(prev => ({
+          ...prev,
+          error: `Failed to process images: ${error}`,
+          loadingMetadata: false,
+          isImageMode: false, // Reset mode on error
+          extractionProgress: { current: 0, total: 0 },
+        }));
       }
-
-      // Sort image files alphabetically by name
-      imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
-      // Convert images to FrameData format
-      const frames = await Promise.all(
-        imageFiles.map(async (file, index) => {
-          const sharpnessScore = await calculateSharpnessScore(file);
-          return {
-            id: `frame-${index}`,
-            name: file.name,
-            format: file.name.split('.').pop() || 'jpeg',
-            sharpnessScore,
-            blob: file,
-            timestamp: index * 1000, // Arbitrary timestamp for images
-            data: new Uint8Array(await file.arrayBuffer())
-          } as FrameData;
-        })
-      );
-
-      updateState(prev => ({
-        ...prev,
-        frames,
-        loadingMetadata: false,
-      }));
-    } catch (error) {
-      console.error('Image processing error:', error);
-      updateState(prev => ({
-        ...prev,
-        error: `Failed to process images: ${error}`,
-        loadingMetadata: false,
-      }));
-    }
-  }, [updateState]);
+    }, [updateState]);
 
   const handleSelectAll = useCallback(() => {
     updateState(prev => ({
