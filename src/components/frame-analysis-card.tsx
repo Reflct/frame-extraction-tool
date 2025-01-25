@@ -10,18 +10,16 @@ interface FrameAnalysisCardProps {
   frames: FrameData[];
   selectedFrames: FrameData[];
   showFrames: boolean;
-  processing: boolean;
-  selectionMode: 'percentage' | 'batched' | 'manual';
-  percentageThreshold: number;
   batchSize: number;
   batchBuffer: number;
-  onSelectionModeChangeAction: (mode: 'percentage' | 'batched' | 'manual') => void;
-  onPercentageThresholdChangeAction: (value: number) => void;
+  bestNCount: number;
+  bestNMinGap: number;
+  onSelectionModeChangeAction: (mode: 'batched' | 'manual' | 'best-n') => void;
   onBatchSizeChangeAction: (size: number) => void;
   onBatchBufferChangeAction: (buffer: number) => void;
+  onBestNCountChangeAction: (count: number) => void;
+  onBestNMinGapChangeAction: (gap: number) => void;
   onToggleFramesAction: () => void;
-  onSelectAllAction?: () => void;
-  onDeselectAllAction?: () => void;
   onToggleFrameSelectionAction: (frameId: string) => void;
 }
 
@@ -29,18 +27,16 @@ export function FrameAnalysisCard({
   frames,
   selectedFrames,
   showFrames,
-  processing,
-  selectionMode,
-  percentageThreshold,
   batchSize,
   batchBuffer,
+  bestNCount,
+  bestNMinGap,
   onSelectionModeChangeAction,
-  onPercentageThresholdChangeAction,
   onBatchSizeChangeAction,
   onBatchBufferChangeAction,
+  onBestNCountChangeAction,
+  onBestNMinGapChangeAction,
   onToggleFramesAction,
-  onSelectAllAction,
-  onDeselectAllAction,
   onToggleFrameSelectionAction
 }: FrameAnalysisCardProps) {
   if (frames.length === 0) return null;
@@ -63,17 +59,15 @@ export function FrameAnalysisCard({
             {/* Selection Controls */}
             <div className="space-y-4">
               <FrameSelection
-                selectionMode={selectionMode}
-                percentageThreshold={percentageThreshold}
                 batchSize={batchSize}
                 batchBuffer={batchBuffer}
+                bestNCount={bestNCount}
+                bestNMinGap={bestNMinGap}
                 onSelectionModeChangeAction={onSelectionModeChangeAction}
-                onPercentageThresholdChangeAction={onPercentageThresholdChangeAction}
                 onBatchSizeChangeAction={onBatchSizeChangeAction}
                 onBatchBufferChangeAction={onBatchBufferChangeAction}
-                onSelectAllAction={onSelectAllAction}
-                onDeselectAllAction={onDeselectAllAction}
-                processing={processing}
+                onBestNCountChangeAction={onBestNCountChangeAction}
+                onBestNMinGapChangeAction={onBestNMinGapChangeAction}
               />
             </div>
 

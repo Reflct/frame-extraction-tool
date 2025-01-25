@@ -14,6 +14,8 @@ interface UploadCardProps {
   onVideoChangeAction: (file: File) => void;
   onVideoReplaceAction: () => void;
   onImageDirectoryChangeAction?: (files: FileList) => Promise<void>;
+  isImageMode?: boolean;
+  imageCount?: number;
 }
 
 export function UploadCard({
@@ -25,6 +27,8 @@ export function UploadCard({
   onVideoChangeAction,
   onVideoReplaceAction,
   onImageDirectoryChangeAction,
+  isImageMode = false,
+  imageCount = 0,
 }: UploadCardProps) {
   const handleImageDirectoryChange = useCallback(async (files: FileList) => {
     if (!files || files.length === 0) return;
@@ -43,6 +47,8 @@ export function UploadCard({
           onVideoChangeAction={onVideoChangeAction}
           onVideoReplaceAction={onVideoReplaceAction}
           onImageDirectoryChangeAction={handleImageDirectoryChange}
+          isImageMode={isImageMode}
+          imageCount={imageCount}
         />
       </div>
     </Card>

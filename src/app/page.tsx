@@ -31,6 +31,8 @@ export default function ExtractPage() {
           onVideoReplaceAction={handlers.handleVideoReplace}
           onImageDirectoryChangeAction={handlers.handleImageDirectoryChange}
           videoRef={videoRef}
+          isImageMode={state.isImageMode}
+          imageCount={state.frames.length}
         />
 
         {/* Extraction Settings Card */}
@@ -65,18 +67,16 @@ export default function ExtractPage() {
         frames={state.frames}
         selectedFrames={getSelectedFrames(state)}
         showFrames={state.showFrames}
-        processing={state.processing}
-        selectionMode={state.selectionMode}
-        percentageThreshold={state.percentageThreshold}
         batchSize={state.batchSize}
         batchBuffer={state.batchBuffer}
+        bestNCount={state.bestNCount}
+        bestNMinGap={state.bestNMinGap}
         onSelectionModeChangeAction={handlers.handleSelectionModeChange}
-        onPercentageThresholdChangeAction={handlers.handlePercentageThresholdChange}
         onBatchSizeChangeAction={handlers.handleBatchSizeChange}
         onBatchBufferChangeAction={handlers.handleBatchBufferChange}
+        onBestNCountChangeAction={(count) => setState(prev => ({ ...prev, bestNCount: count }))}
+        onBestNMinGapChangeAction={(gap) => setState(prev => ({ ...prev, bestNMinGap: gap }))}
         onToggleFramesAction={() => setState(prev => ({ ...prev, showFrames: !prev.showFrames }))}
-        onSelectAllAction={handlers.handleSelectAll}
-        onDeselectAllAction={handlers.handleDeselectAll}
         onToggleFrameSelectionAction={handlers.handleToggleFrameSelection}
       />
 

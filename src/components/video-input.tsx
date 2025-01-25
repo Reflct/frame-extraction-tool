@@ -15,6 +15,8 @@ interface VideoInputProps {
   onVideoChangeAction: (file: File) => void;
   onVideoReplaceAction: () => void;
   onImageDirectoryChangeAction?: (files: FileList) => Promise<void>;
+  isImageMode?: boolean;
+  imageCount?: number;
 }
 
 export const VideoInput: React.FC<VideoInputProps> = ({
@@ -26,6 +28,8 @@ export const VideoInput: React.FC<VideoInputProps> = ({
   onVideoChangeAction,
   onVideoReplaceAction,
   onImageDirectoryChangeAction,
+  isImageMode = false,
+  imageCount = 0,
 }) => {
   const openFileSelector = () => {
     if (loadingMetadata) return;
@@ -99,124 +103,113 @@ export const VideoInput: React.FC<VideoInputProps> = ({
   }, [loadingMetadata, onImageDirectoryChangeAction]);
 
   return (
-    <div 
-      className={clsx(
-        "relative w-full rounded-lg flex items-center justify-center text-center",
-        !video && "h-[300px] border-2 border-dashed hover:bg-gray-50 transition-colors duration-200 cursor-pointer",
-        video && "min-h-fit"
-      )}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-      onClick={(e) => {
-        // Only handle clicks on the container itself, not its children
-        if (e.target === e.currentTarget && !video && !loadingMetadata) {
-          openFileSelector();
-        }
-      }}
-    >
-      {loadingMetadata && (
-        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-lg">
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Loading video metadata...</p>
-          </div>
-        </div>
-      )}
-
-      {video ? (
-        <div className="w-full">
-          <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold leading-tight truncate pr-4">{video.name}</h2>
+    <div className="space-y-4">
+      {!video && !isImageMode ? (
+        <div
+          className={clsx(
+            "relative flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer",
+            loadingMetadata ? "opacity-50 cursor-not-allowed" : "hover:bg-gray-50"
+          )}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+            <p className="mb-2 text-sm text-gray-500">
+              Drag and drop a video here
+            </p>
+            <p className="text-xs text-gray-500 mb-4">MP4, MOV, or WebM</p>
+            <div className="flex flex-col gap-2">
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openFileSelector();
+                }}
+              >
+                Choose Video
+              </Button>
               <Button
                 variant="outline"
-                size="sm"
-                onClick={onVideoReplaceAction}
-                className="shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openDirectorySelector();
+                }}
               >
-                Replace Video
+                Or select image directory
               </Button>
-            </div>
-
-            <div className="flex-1 flex flex-col">
-              {/* Video Preview and Thumbnail */}
-              {videoThumbnail && (
-                <div className="mb-6">
-                  <div className="relative aspect-video bg-muted rounded-xl overflow-hidden">
-                    <video 
-                      ref={videoRef}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      src={videoThumbnail}
-                      controls={false}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Metadata */}
-              {metadata && (
-                <div className="flex-1 flex flex-col justify-end mt-auto">
-                  <div className="grid grid-cols-3 gap-x-8 gap-y-3">
-                    <div>
-                      <dt className="text-sm text-muted-foreground">Duration</dt>
-                      <dd className="text-base font-medium mt-0.5">{metadata.duration.toFixed(2)}s</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-muted-foreground">Resolution</dt>
-                      <dd className="text-base font-medium mt-0.5">{metadata.width}×{metadata.height}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-muted-foreground">FPS</dt>
-                      <dd className="text-base font-medium mt-0.5">{metadata.fps} fps</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-muted-foreground">Total Frames</dt>
-                      <dd className="text-base font-medium mt-0.5">{metadata.totalFrames}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm text-muted-foreground">Codec</dt>
-                      <dd className="text-base font-medium mt-0.5">{metadata.codec}</dd>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-lg font-semibold">Upload a video</p>
-            <p className="text-sm text-muted-foreground max-w-[400px]">
-              Drag and drop your video here, or click to select
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 items-center">
-            <Button
-              variant="secondary"
-              size="lg"
-              className="w-full"
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent the parent div's onClick from firing
-                openFileSelector();
-              }}
-              disabled={loadingMetadata}
-            >
-              Choose Video
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="w-full"
-              onClick={(e) => {
-                e.stopPropagation();
-                openDirectorySelector();
-              }}
-              disabled={loadingMetadata}
-            >
-              Choose Image Directory
-            </Button>
-          </div>
+        <div className="space-y-4">
+          {isImageMode ? (
+            <div className="flex flex-col space-y-2">
+              <h3 className="text-lg font-semibold">Image Directory</h3>
+              <p className="text-sm text-gray-500">{imageCount} images loaded</p>
+              <Button
+                variant="outline"
+                onClick={onVideoReplaceAction}
+                disabled={loadingMetadata}
+              >
+                Replace Images
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-100">
+                {videoThumbnail && (
+                  <video
+                    ref={videoRef}
+                    src={videoThumbnail}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                )}
+              </div>
+              <div className="space-y-6">
+                <div className="flex items-center justify-between pt-2">
+                  <h3 className="text-base font-semibold text-gray-900">{video?.name}</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onVideoReplaceAction}
+                    disabled={loadingMetadata}
+                    className="ml-4"
+                  >
+                    Replace Video
+                  </Button>
+                </div>
+                {metadata && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-y-6 gap-x-8 p-4 bg-gray-50 rounded-lg">
+                    <div className="space-y-1">
+                      <div className="text-sm text-gray-500">Duration</div>
+                      <div className="text-sm font-semibold text-gray-900">{Math.round(metadata.duration)}s</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-sm text-gray-500">Resolution</div>
+                      <div className="text-sm font-semibold text-gray-900">{metadata.width}×{metadata.height}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-sm text-gray-500">FPS</div>
+                      <div className="text-sm font-semibold text-gray-900">{metadata.fps} fps</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-sm text-gray-500">Total Frames</div>
+                      <div className="text-sm font-semibold text-gray-900">{Math.round(metadata.duration * metadata.fps)}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-sm text-gray-500">Codec</div>
+                      <div className="text-sm font-semibold text-gray-900">h264</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      {loadingMetadata && (
+        <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading metadata...
         </div>
       )}
     </div>

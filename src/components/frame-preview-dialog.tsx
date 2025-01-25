@@ -44,7 +44,7 @@ export function FramePreviewDialog({
       if (e.key.toLowerCase() === 'z') {
         e.preventDefault();
         setIsZooming(true);
-      } else if (onToggleSelection && (e.key.toLowerCase() === 'a' || e.key.toLowerCase() === 'd')) {
+      } else if (onToggleSelection && e.key.toLowerCase() === 'a') {
         e.preventDefault();
         onToggleSelection();
       } else if (e.key === 'ArrowLeft' && onPrevious && frame) {
@@ -129,7 +129,7 @@ export function FramePreviewDialog({
                   {localSelected ? "Selected" : "Not Selected"}
                   {onToggleSelection && (
                     <span className="ml-2 text-xs text-white/80">
-                      (Press A/D)
+                      (Press A)
                     </span>
                   )}
                 </Button>
@@ -193,7 +193,7 @@ export function FramePreviewDialog({
             />
           </div>
           <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-            Hold Z to zoom
+            Hold Z to zoom • Press A to select
           </div>
         </div>
 

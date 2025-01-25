@@ -21,10 +21,12 @@ export interface ExtractPageState {
   videoThumbnailUrl: string | null;
   extractionProgress: ProgressInfo;
   sharpnessProgress: ProgressInfo;
-  selectionMode: 'percentage' | 'batched' | 'manual';
+  selectionMode: 'batched' | 'manual' | 'best-n';
   percentageThreshold: number;
   batchSize: number;
   batchBuffer: number;
+  bestNCount: number;
+  bestNMinGap: number;
   error: string | null;
   showFrames: boolean;
   showClearCacheDialog: boolean;
@@ -52,12 +54,14 @@ export const defaultState: ExtractPageState = {
   videoThumbnailUrl: null,
   extractionProgress: { current: 0, total: 0 },
   sharpnessProgress: { current: 0, total: 0 },
-  selectionMode: 'percentage',
+  selectionMode: 'batched',
   percentageThreshold: 50,
-  batchSize: 10,
-  batchBuffer: 3,
+  batchSize: 3,
+  batchBuffer: 1,
+  bestNCount: 300,
+  bestNMinGap: 5,
   error: null,
-  showFrames: true,
+  showFrames: false,
   showClearCacheDialog: false,
   timeRange: [0, 0],
   imageFiles: null,

@@ -6,6 +6,7 @@ import { extractFramesInBrowser } from '@/lib/browserFrameExtraction';
 import { calculateSharpnessScore } from '@/lib/opencvUtils';
 import { type FrameData } from '@/types/frame';
 import { getVideoMetadata } from '@/lib/videoUtils';
+import { getSelectedFrames } from '@/utils/frame-selection';
 import JSZip from 'jszip';
 
 export function useFrameExtraction() {
@@ -239,34 +240,42 @@ export function useFrameExtraction() {
     }
   }, [state.videoFile, state.videoMetadata, state.fps, state.format, state.timeRange, state.prefix, state.useOriginalFrameRate, updateState]);
 
+  // Helper functions for selection logic
+  const isFrameSelectedByBatch = (frame: FrameData, frames: FrameData[], batchSize: number, batchBuffer: number): boolean => {
+    const index = frames.indexOf(frame);
+    const batchStart = Math.floor(index / (batchSize + batchBuffer)) * (batchSize + batchBuffer);
+    const batch = frames.slice(batchStart, batchStart + batchSize);
+    
+    // If frame is not in the current batch range, it's not selected
+    if (index < batchStart || index >= batchStart + batchSize) return false;
+    
+    // Find the sharpest frame in this batch
+    const sharpestFrame = batch.reduce((best, current) => 
+      (current.sharpnessScore || 0) > (best.sharpnessScore || 0) ? current : best
+    , batch[0]);
+    
+    // Frame is selected if it's the sharpest in its batch
+    return frame.id === sharpestFrame.id;
+  };
+
+  const handleToggleFrameSelection = useCallback((frameId: string) => {
+    updateState(prev => ({
+      ...prev,
+      frames: prev.frames.map(f => {
+        if (f.id === frameId) {
+          // Toggle manual selection regardless of auto-selection
+          return { ...f, selected: !f.selected };
+        }
+        return f;
+      })
+    }));
+  }, [updateState]);
+
   const handleDownload = useCallback(async () => {
-    // Get automatically selected frames based on mode
-    let autoSelectedFrameIds: string[] = [];
-    if (state.selectionMode === 'percentage') {
-      autoSelectedFrameIds = state.frames
-        .sort((a, b) => (b.sharpnessScore || 0) - (a.sharpnessScore || 0))
-        .slice(0, Math.ceil(state.frames.length * (state.percentageThreshold / 100)))
-        .map(f => f.id);
-    } else if (state.selectionMode === 'batched') {
-      autoSelectedFrameIds = state.frames
-        .reduce((acc, frame, index) => {
-          const positionInBatch = index % (state.batchSize + state.batchBuffer);
-          if (positionInBatch < state.batchSize) {
-            acc.push(frame.id);
-          }
-          return acc;
-        }, [] as string[]);
-    }
+    // Get selected frames using the utility function
+    const selectedFrames = getSelectedFrames(state);
 
-    // Get manually selected frames
-    const manuallySelectedFrameIds = state.frames
-      .filter(f => f.selected)
-      .map(f => f.id);
-
-    // Combine both selections
-    const selectedFrameIds = new Set([...autoSelectedFrameIds, ...manuallySelectedFrameIds]);
-
-    if (selectedFrameIds.size === 0) {
+    if (selectedFrames.length === 0) {
       console.error('No frames selected for download');
       return;
     }
@@ -275,9 +284,8 @@ export function useFrameExtraction() {
       const zip = new JSZip();
       
       // Add selected frames to zip
-      Array.from(selectedFrameIds).forEach(frameId => {
-        const frame = state.frames.find(f => f.id === frameId);
-        if (frame?.blob) {
+      selectedFrames.forEach(frame => {
+        if (frame.blob) {
           zip.file(frame.name, frame.blob);
         }
       });
@@ -299,7 +307,7 @@ export function useFrameExtraction() {
         error: 'Failed to download frames'
       }));
     }
-  }, [state.frames, state.selectionMode, state.percentageThreshold, state.batchSize, state.batchBuffer, updateState]);
+  }, [state, updateState]);
 
   const handleClearCache = useCallback(async () => {
     try {
@@ -395,19 +403,7 @@ export function useFrameExtraction() {
     }));
   }, [updateState]);
 
-  const handleToggleFrameSelection = useCallback((frameId: string) => {
-    updateState(prev => ({
-      ...prev,
-      frames: prev.frames.map(f => {
-        if (f.id === frameId) {
-          return { ...f, selected: !f.selected };
-        }
-        return f;
-      })
-    }));
-  }, [updateState]);
-
-  const handleSelectionModeChange = useCallback((mode: 'percentage' | 'batched' | 'manual') => {
+  const handleSelectionModeChange = useCallback((mode: 'batched' | 'manual' | 'best-n') => {
     updateState(prev => ({
       ...prev,
       selectionMode: mode,
@@ -419,7 +415,14 @@ export function useFrameExtraction() {
     updateState(prev => ({
       ...prev,
       batchSize: size,
-      frames: prev.frames.map(f => ({ ...f, selected: false }))
+      frames: prev.frames.map(f => {
+        // Preserve manual selections, reset automatic ones
+        const isManuallySelected = f.selected && !isFrameSelectedByBatch(f, prev.frames, prev.batchSize, prev.batchBuffer);
+        return { 
+          ...f, 
+          selected: isManuallySelected || isFrameSelectedByBatch(f, prev.frames, size, prev.batchBuffer)
+        };
+      })
     }));
   }, [updateState]);
 
@@ -427,15 +430,14 @@ export function useFrameExtraction() {
     updateState(prev => ({
       ...prev,
       batchBuffer: buffer,
-      frames: prev.frames.map(f => ({ ...f, selected: false }))
-    }));
-  }, [updateState]);
-
-  const handlePercentageThresholdChange = useCallback((value: number) => {
-    updateState(prev => ({
-      ...prev,
-      percentageThreshold: value,
-      frames: prev.frames.map(f => ({ ...f, selected: false }))
+      frames: prev.frames.map(f => {
+        // Preserve manual selections, reset automatic ones
+        const isManuallySelected = f.selected && !isFrameSelectedByBatch(f, prev.frames, prev.batchSize, prev.batchBuffer);
+        return { 
+          ...f, 
+          selected: isManuallySelected || isFrameSelectedByBatch(f, prev.frames, prev.batchSize, buffer)
+        };
+      })
     }));
   }, [updateState]);
 
@@ -456,7 +458,6 @@ export function useFrameExtraction() {
       handleSelectionModeChange,
       handleBatchSizeChange,
       handleBatchBufferChange,
-      handlePercentageThresholdChange,
     },
   };
 }
