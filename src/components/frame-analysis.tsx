@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useLayoutEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BarChart, Bar, YAxis, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { type FrameData, type FrameMetadata } from '@/types/frame';
@@ -19,8 +19,6 @@ interface FrameAnalysisProps {
 interface ChartMouseMoveState {
   activePayload?: Array<{ 
     payload: { 
-      x: number;
-      y: number;
       frame: FrameData;
     }
   }>;
@@ -43,7 +41,6 @@ export function FrameAnalysis({
   const [thumbnailUrls, setThumbnailUrls] = useState<Map<string, string>>(new Map());
   const loadingThumbnails = useRef<Set<string>>(new Set());
   const chartRef = useRef<HTMLDivElement>(null);
-  const chartRectRef = useRef<DOMRect | null>(null);
 
   // Load thumbnails when frames change
   useEffect(() => {
@@ -191,36 +188,30 @@ export function FrameAnalysis({
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [hoveredFrame, onFrameSelectAction]);
 
-  // Cache chart position
-  useLayoutEffect(() => {
-    const updateChartRect = () => {
-      if (chartRef.current) {
-        chartRectRef.current = chartRef.current.getBoundingClientRect();
-      }
-    };
-
-    updateChartRect();
-    window.addEventListener('resize', updateChartRect);
-    window.addEventListener('scroll', updateChartRect);
-
-    return () => {
-      window.removeEventListener('resize', updateChartRect);
-      window.removeEventListener('scroll', updateChartRect);
-    };
-  }, []);
-
   // Optimized mouse move handler
   const handleChartMouseMove = useCallback((state: ChartMouseMoveState) => {
-    if (state?.activePayload?.[0]?.payload) {
+    if (state?.activePayload?.[0]?.payload && chartRef.current) {
       const { frame } = state.activePayload[0].payload;
       setHoveredFrame(frame);
-      if (state.chartX && state.chartY && chartRectRef.current) {
+      
+      // Get the scrollable container's position
+      const containerRect = chartRef.current.getBoundingClientRect();
+      const scrollLeft = chartRef.current.scrollLeft;
+      
+      // Adjust the chart coordinates relative to the viewport
+      if (typeof state.chartX === 'number' && typeof state.chartY === 'number') {
         setTooltipPosition({
-          x: chartRectRef.current.left + state.chartX,
-          y: chartRectRef.current.top + state.chartY
+          x: containerRect.left + state.chartX - scrollLeft,
+          y: containerRect.top + state.chartY
         });
       }
     }
+  }, []);
+
+  // Handle mouse leave
+  const handleChartMouseLeave = useCallback(() => {
+    setHoveredFrame(null);
+    setTooltipPosition(null);
   }, []);
 
   return (
@@ -273,10 +264,7 @@ export function FrameAnalysis({
                   frame
                 }))}
                 onMouseMove={handleChartMouseMove}
-                onMouseLeave={() => {
-                  setHoveredFrame(null);
-                  setTooltipPosition(null);
-                }}
+                onMouseLeave={handleChartMouseLeave}
                 margin={{ left: 40 }}
               >
                 <YAxis 
