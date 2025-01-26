@@ -12,7 +12,7 @@ export function useCache() {
   useEffect(() => {
     async function clearOldCache() {
       try {
-        const frames = await frameStorage.getAllFrames();
+        const frames = await frameStorage.getAllMetadata();
         if (frames.length === 0) return;
 
         // Clear frames older than 24 hours
