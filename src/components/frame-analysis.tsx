@@ -1,18 +1,31 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useLayoutEffect } from 'react';
 import { BarChart, Bar, YAxis, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { type FrameData, type FrameMetadata } from '@/types/frame';
 import Image from 'next/image';
 import { FramePreviewDialog } from './frame-preview-dialog';
-import { createPortal } from 'react-dom';
+import { frameStorage } from '@/lib/frameStorage';
+import { ChartTooltip } from './chart-tooltip';
 
 interface FrameAnalysisProps {
   frames: FrameData[];
   selectedFrames: Set<string>;
   onFrameSelectAction: (frameId: string) => void;
   showImageGrid?: boolean;
+}
+
+interface ChartMouseMoveState {
+  activePayload?: Array<{ 
+    payload: { 
+      x: number;
+      y: number;
+      frame: FrameData;
+    }
+  }>;
+  chartX?: number;
+  chartY?: number;
 }
 
 export function FrameAnalysis({
@@ -27,35 +40,92 @@ export function FrameAnalysis({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [frameData, setFrameData] = useState<Record<string, Uint8Array>>({});
   const convertingRef = useRef<Record<string, boolean>>({});
-  const [frameUrls, setFrameUrls] = useState<Map<string, string>>(new Map());
+  const [thumbnailUrls, setThumbnailUrls] = useState<Map<string, string>>(new Map());
+  const loadingThumbnails = useRef<Set<string>>(new Set());
+  const chartRef = useRef<HTMLDivElement>(null);
+  const chartRectRef = useRef<DOMRect | null>(null);
 
-  // Create blob URLs when frames change
+  // Load thumbnails when frames change
   useEffect(() => {
-    const newUrls = new Map<string, string>();
+    const newUrls = new Map<string, string>(thumbnailUrls);
     
-    frames.forEach(frame => {
-      if (frame.blob) {
-        const url = URL.createObjectURL(frame.blob);
-        newUrls.set(frame.id, url);
+    // Cleanup URLs for frames that no longer exist
+    for (const [id, url] of thumbnailUrls.entries()) {
+      if (!frames.some(frame => frame.id === id)) {
+        URL.revokeObjectURL(url);
+        newUrls.delete(id);
       }
-    });
+    }
 
-    setFrameUrls(newUrls);
+    // Load missing thumbnails
+    async function loadMissingThumbnails() {
+      const missingFrames = frames.filter(frame => !newUrls.has(frame.id));
+      
+      for (const frame of missingFrames) {
+        if (loadingThumbnails.current.has(frame.id)) continue;
+        
+        try {
+          loadingThumbnails.current.add(frame.id);
+          const thumbnail = await frameStorage.getFrameThumbnail(frame.id);
+          if (thumbnail) {
+            const url = URL.createObjectURL(thumbnail);
+            newUrls.set(frame.id, url);
+            setThumbnailUrls(new Map(newUrls));
+          }
+        } catch (error) {
+          console.error(`Failed to load thumbnail for frame ${frame.id}:`, error);
+        } finally {
+          loadingThumbnails.current.delete(frame.id);
+        }
+      }
+    }
 
-    // Cleanup old blob URLs on unmount
+    loadMissingThumbnails();
+
     return () => {
-      newUrls.forEach(url => URL.revokeObjectURL(url));
+      // Only cleanup URLs for frames that no longer exist
+      for (const [id, url] of thumbnailUrls.entries()) {
+        if (!frames.some(frame => frame.id === id)) {
+          URL.revokeObjectURL(url);
+        }
+      }
     };
-  }, [frames]);
+  }, [frames, thumbnailUrls]);
 
-  // Get blob URL for a frame
-  const getFrameUrl = useCallback((frameId: string) => {
-    return frameUrls.get(frameId) || null;
-  }, [frameUrls]);
+  // Load thumbnail for hovered frame immediately
+  useEffect(() => {
+    if (!hoveredFrame?.id || thumbnailUrls.has(hoveredFrame.id)) return;
+
+    const frameId = hoveredFrame.id; // Store id to avoid null checks
+
+    async function loadHoveredThumbnail() {
+      if (loadingThumbnails.current.has(frameId)) return;
+      
+      try {
+        loadingThumbnails.current.add(frameId);
+        const thumbnail = await frameStorage.getFrameThumbnail(frameId);
+        if (thumbnail) {
+          const url = URL.createObjectURL(thumbnail);
+          setThumbnailUrls(prev => new Map(prev.set(frameId, url)));
+        }
+      } catch (error) {
+        console.error(`Failed to load thumbnail for hovered frame ${frameId}:`, error);
+      } finally {
+        loadingThumbnails.current.delete(frameId);
+      }
+    }
+
+    loadHoveredThumbnail();
+  }, [hoveredFrame, thumbnailUrls]);
+
+  // Get thumbnail URL for a frame
+  const getThumbnailUrl = useCallback((frameId: string) => {
+    return thumbnailUrls.get(frameId);
+  }, [thumbnailUrls]);
 
   // Render frame thumbnail component
   const FrameThumbnail = useCallback(({ frame }: { frame: FrameData }) => {
-    const url = getFrameUrl(frame.id);
+    const url = getThumbnailUrl(frame.id);
     if (!url) return null;
 
     return (
@@ -70,15 +140,18 @@ export function FrameAnalysis({
         />
       </div>
     );
-  }, [getFrameUrl]);
+  }, [getThumbnailUrl]);
 
   // Convert Blob to Uint8Array
-  const convertBlobToUint8Array = useCallback(async (frame: FrameData): Promise<void> => {
+  const convertBlobToUint8Array = useCallback(async (frame: FrameMetadata): Promise<void> => {
     if (frameData[frame.name] || convertingRef.current[frame.name]) return;
     
     convertingRef.current[frame.name] = true;
     try {
-      const arrayBuffer = await frame.blob.arrayBuffer();
+      const blob = await frameStorage.getFrameBlob(frame.id);
+      if (!blob) return;
+      
+      const arrayBuffer = await blob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
       setFrameData(prev => ({ ...prev, [frame.name]: uint8Array }));
     } finally {
@@ -118,6 +191,38 @@ export function FrameAnalysis({
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [hoveredFrame, onFrameSelectAction]);
 
+  // Cache chart position
+  useLayoutEffect(() => {
+    const updateChartRect = () => {
+      if (chartRef.current) {
+        chartRectRef.current = chartRef.current.getBoundingClientRect();
+      }
+    };
+
+    updateChartRect();
+    window.addEventListener('resize', updateChartRect);
+    window.addEventListener('scroll', updateChartRect);
+
+    return () => {
+      window.removeEventListener('resize', updateChartRect);
+      window.removeEventListener('scroll', updateChartRect);
+    };
+  }, []);
+
+  // Optimized mouse move handler
+  const handleChartMouseMove = useCallback((state: ChartMouseMoveState) => {
+    if (state?.activePayload?.[0]?.payload) {
+      const { frame } = state.activePayload[0].payload;
+      setHoveredFrame(frame);
+      if (state.chartX && state.chartY && chartRectRef.current) {
+        setTooltipPosition({
+          x: chartRectRef.current.left + state.chartX,
+          y: chartRectRef.current.top + state.chartY
+        });
+      }
+    }
+  }, []);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -152,10 +257,9 @@ export function FrameAnalysis({
       {/* Histogram */}
       <div className="relative h-[300px] w-full overflow-hidden">
         <div 
+          ref={chartRef}
           className="h-full overflow-x-auto"
-          style={{ 
-            width: '100%'
-          }}
+          style={{ width: '100%' }}
         >
           <div style={{ 
             width: `${Math.max(frames.length * 8, 100)}px`,
@@ -168,22 +272,7 @@ export function FrameAnalysis({
                   y: frame.sharpnessScore || 0,
                   frame
                 }))}
-                onMouseMove={(state) => {
-                  if (state?.activePayload?.[0]?.payload) {
-                    const data = state.activePayload[0].payload as { frame: FrameData };
-                    setHoveredFrame(data.frame);
-                    if (state.chartX && state.chartY) {
-                      const chartElement = document.querySelector('.recharts-wrapper');
-                      if (chartElement) {
-                        const rect = chartElement.getBoundingClientRect();
-                        setTooltipPosition({
-                          x: rect.left + state.chartX,
-                          y: rect.top + state.chartY
-                        });
-                      }
-                    }
-                  }
-                }}
+                onMouseMove={handleChartMouseMove}
                 onMouseLeave={() => {
                   setHoveredFrame(null);
                   setTooltipPosition(null);
@@ -229,37 +318,11 @@ export function FrameAnalysis({
         </div>
       </div>
 
-      {hoveredFrame && tooltipPosition && createPortal(
-        <div 
-          className="bg-white p-3 border rounded-lg shadow-lg fixed"
-          style={{
-            transform: 'translate(-50%, -100%)',
-            left: tooltipPosition.x,
-            top: tooltipPosition.y - 16,
-            pointerEvents: 'none',
-            zIndex: 9999
-          }}
-        >
-          <div className="relative w-48 aspect-video mb-2 rounded-md overflow-hidden">
-            {getFrameUrl(hoveredFrame.id) && (
-              <Image
-                src={getFrameUrl(hoveredFrame.id)!}
-                alt={hoveredFrame.name}
-                fill
-                className="object-cover"
-                sizes="192px"
-              />
-            )}
-          </div>
-          <div className="space-y-1">
-            <p className="text-sm font-medium">{hoveredFrame.name}</p>
-            <p className="text-sm text-muted-foreground">
-              Sharpness: {hoveredFrame.sharpnessScore?.toFixed(1)}
-            </p>
-          </div>
-        </div>,
-        document.body
-      )}
+      <ChartTooltip
+        frame={hoveredFrame}
+        position={tooltipPosition}
+        getThumbnailUrl={getThumbnailUrl}
+      />
 
       {/* Section Title */}
       {showImageGrid && (
@@ -288,6 +351,7 @@ export function FrameAnalysis({
         open={isPreviewOpen}
         onOpenChangeAction={setIsPreviewOpen}
         frame={selectedFrame}
+        frames={frames}
         isSelected={selectedFrame ? selectedFrames.has(selectedFrame.id) : undefined}
         onToggleSelection={selectedFrame ? () => onFrameSelectAction(selectedFrame.id) : undefined}
         onNext={handleNext}

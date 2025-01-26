@@ -85,14 +85,33 @@ export async function extractFramesInBrowser(
         name: fileName,
         format,
         timestamp: time,
+        data: new Uint8Array(await blob.arrayBuffer()),
+        storedAt: Date.now()
       });
 
       currentFrame++;
       onProgress(currentFrame, totalFrames);
     }
 
-    // Get all stored frames
-    return await frameStorage.getAllFrames();
+    // Get existing frames
+    let existingFrames: Array<{ id: string; blob: Blob; name: string; format: string; timestamp: number }> = [];
+    try {
+      const metadata = await frameStorage.getAllMetadata();
+      existingFrames = await Promise.all(
+        metadata.map(async (frame) => {
+          const blob = await frameStorage.getFrameBlob(frame.id);
+          return {
+            ...frame,
+            blob: blob!
+          };
+        })
+      );
+    } catch (error) {
+      console.error('Error getting existing frames:', error);
+    }
+
+    // Return stored frames
+    return existingFrames;
   } finally {
     // Clean up
     URL.revokeObjectURL(videoUrl);
