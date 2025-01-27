@@ -286,11 +286,12 @@ export function useFrameExtraction() {
       const zip = new JSZip();
       
       // Add selected frames to zip
-      selectedFrames.forEach(frame => {
-        if (frame.blob) {
-          zip.file(frame.name, frame.blob);
+      await Promise.all(selectedFrames.map(async (frame) => {
+        const blob = await frameStorage.getFrameBlob(frame.id);
+        if (blob) {
+          zip.file(frame.name, blob);
         }
-      });
+      }));
 
       // Generate and download zip
       const content = await zip.generateAsync({ type: 'blob' });
@@ -338,6 +339,14 @@ export function useFrameExtraction() {
     async (files: FileList) => {
       console.log('Starting image directory processing...', { fileCount: files.length });
       
+      updateState(prev => ({
+        ...prev,
+        loadingMetadata: true,
+        error: null,
+        frames: [],
+        isImageMode: true,
+      }));
+
       try {
         // Filter for image files only
         const imageFiles = Array.from(files).filter(file => {
@@ -354,21 +363,6 @@ export function useFrameExtraction() {
         if (imageFiles.length === 0) {
           throw new Error('No valid image files found in the selected directory');
         }
-
-        // Only now update the state to indicate we're starting
-        updateState(prev => ({
-          ...prev,
-          loadingMetadata: false,
-          error: null,
-          frames: [],
-          isImageMode: true,
-          processing: true,
-          extractionProgress: {
-            current: 0,
-            total: imageFiles.length,
-            startTime: Date.now()
-          }
-        }));
 
         // Sort image files alphabetically by name
         imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
@@ -475,7 +469,6 @@ export function useFrameExtraction() {
           frames: frameMetadata.sort((a, b) => a.timestamp - b.timestamp), // Final sort by timestamp
           loadingMetadata: false,
           extractionProgress: { current: 0, total: 0 },
-          processing: false
         }));
       } catch (error) {
         console.error('Image processing error:', { 
@@ -490,7 +483,6 @@ export function useFrameExtraction() {
           loadingMetadata: false,
           isImageMode: false, // Reset mode on error
           extractionProgress: { current: 0, total: 0 },
-          processing: false
         }));
       }
     }, [updateState]);
