@@ -72,11 +72,13 @@ export default function ExtractPage() {
         batchBuffer={state.batchBuffer}
         bestNCount={state.bestNCount}
         bestNMinGap={state.bestNMinGap}
+        percentageThreshold={state.percentageThreshold}
         onSelectionModeChangeAction={handlers.handleSelectionModeChange}
         onBatchSizeChangeAction={handlers.handleBatchSizeChange}
         onBatchBufferChangeAction={handlers.handleBatchBufferChange}
         onBestNCountChangeAction={(count) => setState(prev => ({ ...prev, bestNCount: count }))}
         onBestNMinGapChangeAction={(gap) => setState(prev => ({ ...prev, bestNMinGap: gap }))}
+        onPercentageThresholdChangeAction={(threshold) => setState(prev => ({ ...prev, percentageThreshold: threshold }))}
         onToggleFramesAction={() => setState(prev => ({ ...prev, showFrames: !prev.showFrames }))}
         onToggleFrameSelectionAction={handlers.handleToggleFrameSelection}
       />

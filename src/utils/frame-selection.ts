@@ -103,6 +103,21 @@ function selectBestNFrames(frames: FrameData[], n: number, minGap: number): Fram
   return selectedFrames;
 }
 
+function selectTopPercentFrames(frames: FrameData[], percentageThreshold: number): FrameData[] {
+  if (frames.length === 0) return [];
+
+  // Sort frames by sharpness score in descending order
+  const sortedFrames = [...frames].sort((a, b) => 
+    (b.sharpnessScore ?? 0) - (a.sharpnessScore ?? 0)
+  );
+
+  // Calculate how many frames to select based on the percentage
+  const numFramesToSelect = Math.ceil(frames.length * (percentageThreshold / 100));
+
+  // Return the top N% frames
+  return sortedFrames.slice(0, numFramesToSelect);
+}
+
 export function getSelectedFrames(state: ExtractPageState): FrameData[] {
   if (state.frames.length === 0) return [];
 
@@ -138,6 +153,8 @@ export function getSelectedFrames(state: ExtractPageState): FrameData[] {
     }
   } else if (state.selectionMode === 'best-n') {
     autoSelectedFrames = selectBestNFrames(framesWithScores, state.bestNCount, state.bestNMinGap);
+  } else if (state.selectionMode === 'top-percent') {
+    autoSelectedFrames = selectTopPercentFrames(framesWithScores, state.percentageThreshold);
   }
 
   // Get manually selected frames

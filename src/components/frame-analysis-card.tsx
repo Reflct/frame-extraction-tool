@@ -14,11 +14,13 @@ interface FrameAnalysisCardProps {
   batchBuffer: number;
   bestNCount: number;
   bestNMinGap: number;
-  onSelectionModeChangeAction: (mode: 'batched' | 'manual' | 'best-n') => void;
+  percentageThreshold: number;
+  onSelectionModeChangeAction: (mode: 'batched' | 'manual' | 'best-n' | 'top-percent') => void;
   onBatchSizeChangeAction: (size: number) => void;
   onBatchBufferChangeAction: (buffer: number) => void;
   onBestNCountChangeAction: (count: number) => void;
   onBestNMinGapChangeAction: (gap: number) => void;
+  onPercentageThresholdChangeAction: (threshold: number) => void;
   onToggleFramesAction: () => void;
   onToggleFrameSelectionAction: (frameId: string) => void;
 }
@@ -31,11 +33,13 @@ export function FrameAnalysisCard({
   batchBuffer,
   bestNCount,
   bestNMinGap,
+  percentageThreshold,
   onSelectionModeChangeAction,
   onBatchSizeChangeAction,
   onBatchBufferChangeAction,
   onBestNCountChangeAction,
   onBestNMinGapChangeAction,
+  onPercentageThresholdChangeAction,
   onToggleFramesAction,
   onToggleFrameSelectionAction
 }: FrameAnalysisCardProps) {
@@ -63,11 +67,13 @@ export function FrameAnalysisCard({
                 batchBuffer={batchBuffer}
                 bestNCount={bestNCount}
                 bestNMinGap={bestNMinGap}
+                percentageThreshold={percentageThreshold}
                 onSelectionModeChangeAction={onSelectionModeChangeAction}
                 onBatchSizeChangeAction={onBatchSizeChangeAction}
                 onBatchBufferChangeAction={onBatchBufferChangeAction}
                 onBestNCountChangeAction={onBestNCountChangeAction}
                 onBestNMinGapChangeAction={onBestNMinGapChangeAction}
+                onPercentageThresholdChangeAction={onPercentageThresholdChangeAction}
               />
             </div>
 

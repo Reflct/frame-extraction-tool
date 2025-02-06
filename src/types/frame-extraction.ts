@@ -21,7 +21,7 @@ export interface ExtractPageState {
   videoThumbnailUrl: string | null;
   extractionProgress: ProgressInfo;
   sharpnessProgress: ProgressInfo;
-  selectionMode: 'batched' | 'manual' | 'best-n';
+  selectionMode: 'batched' | 'manual' | 'best-n' | 'top-percent';
   percentageThreshold: number;
   batchSize: number;
   batchBuffer: number;

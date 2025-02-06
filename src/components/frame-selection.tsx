@@ -5,17 +5,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 
 interface FrameSelectionProps {
   batchSize: number;
   batchBuffer: number;
   bestNCount: number;
   bestNMinGap: number;
-  onSelectionModeChangeAction: (mode: 'batched' | 'manual' | 'best-n') => void;
+  percentageThreshold: number;
+  onSelectionModeChangeAction: (mode: 'batched' | 'manual' | 'best-n' | 'top-percent') => void;
   onBatchSizeChangeAction: (size: number) => void;
   onBatchBufferChangeAction: (buffer: number) => void;
   onBestNCountChangeAction: (count: number) => void;
   onBestNMinGapChangeAction: (gap: number) => void;
+  onPercentageThresholdChangeAction: (threshold: number) => void;
 }
 
 export function FrameSelection({
@@ -23,11 +26,13 @@ export function FrameSelection({
   batchBuffer,
   bestNCount,
   bestNMinGap,
+  percentageThreshold,
   onSelectionModeChangeAction,
   onBatchSizeChangeAction,
   onBatchBufferChangeAction,
   onBestNCountChangeAction,
   onBestNMinGapChangeAction,
+  onPercentageThresholdChangeAction,
 }: FrameSelectionProps) {
   const selectionModes = [
     {
@@ -39,6 +44,11 @@ export function FrameSelection({
       value: 'best-n',
       label: 'Best N Selection',
       description: 'Select N frames with highest sharpness scores, evenly distributed',
+    },
+    {
+      value: 'top-percent',
+      label: 'Top Percentage',
+      description: 'Select frames with sharpness scores in the top N percent',
     },
     {
       value: 'manual',
@@ -55,11 +65,11 @@ export function FrameSelection({
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="batched" onValueChange={(value: string) => {
-          if (value === 'batched' || value === 'manual' || value === 'best-n') {
+          if (value === 'batched' || value === 'manual' || value === 'best-n' || value === 'top-percent') {
             onSelectionModeChangeAction(value);
           }
         }}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             {selectionModes.map(mode => (
               <TabsTrigger key={mode.value} value={mode.value}>
                 {mode.label}
@@ -127,6 +137,37 @@ export function FrameSelection({
                     />
                     <p className="text-sm text-muted-foreground">
                       Minimum number of frames between selected frames
+                    </p>
+                  </div>
+                </div>
+              )}
+              {mode.value === 'top-percent' && (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-2">
+                    <Label>Top Percentage</Label>
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1 max-w-[200px]">
+                        <Slider
+                          value={[percentageThreshold]}
+                          onValueChange={(values) => {
+                            if (Array.isArray(values) && typeof values[0] === 'number') {
+                              onPercentageThresholdChangeAction(values[0]);
+                            }
+                          }}
+                          min={0}
+                          max={100}
+                          step={1}
+                          className="w-full"
+                          id="top-percentage-slider"
+                          aria-label="Select top percentage of frames"
+                        />
+                      </div>
+                      <div className="w-12 text-sm font-medium">
+                        {percentageThreshold}%
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Select frames with sharpness scores in the top {percentageThreshold}%
                     </p>
                   </div>
                 </div>

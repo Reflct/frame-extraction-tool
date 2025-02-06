@@ -507,11 +507,14 @@ export function useFrameExtraction() {
     }));
   }, [updateState]);
 
-  const handleSelectionModeChange = useCallback((mode: 'batched' | 'manual' | 'best-n') => {
+  const handleSelectionModeChange = useCallback((mode: 'batched' | 'manual' | 'best-n' | 'top-percent') => {
     updateState(prev => ({
       ...prev,
       selectionMode: mode,
-      frames: prev.frames.map(f => ({ ...f, selected: false }))
+      frames: prev.frames.map(f => ({
+        ...f,
+        selected: false
+      }))
     }));
   }, [updateState]);
 
