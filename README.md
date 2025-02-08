@@ -2,14 +2,14 @@ _Unlike Reflct.app, this project was primarily built using AI coding tools. Ther
 
 # Frame Extractor
 
-A powerful web-based tool for extracting and analyzing frames from video files. Built with Next.js, OpenCV.js, and FFMPEG.wasm.
+A powerful web-based tool for extracting and analyzing frames from video files, or existing image datasets. Built with Next.js, OpenCV.js, and FFMPEG.wasm.
 
 ## Features
 
 - Extract frames from video files directly in your browser
 - Advanced frame analysis with OpenCV.js
-- Fast processing using WebAssembly
-- Local browser storage for extracted frames
+- Fast web based frame extraction with native video element
+- Local browser storage for extracted frames 
 - Export frames as ZIP archives
 
 ## Getting Started
@@ -36,7 +36,7 @@ npm run dev
 
 - **Framework**: Next.js 14 with App Router
 - **UI**: Tailwind CSS + Shadcn/ui
-- **Video Processing**: FFMPEG.wasm
+- **Video Processing**: FFMPEG.wasm, native video element + canvas
 - **Image Processing**: OpenCV.js
 - **Storage**: Browser IndexedDB
 
