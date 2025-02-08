@@ -1,3 +1,5 @@
+_Unlike Reflct.app, this project was primarily built using AI coding tools. There may be some repetition or inconsistency in the code._
+
 # Frame Extractor
 
 A powerful web-based tool for extracting and analyzing frames from video files. Built with Next.js, OpenCV.js, and FFMPEG.wasm.
