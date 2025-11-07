@@ -25,8 +25,8 @@ export function useCache() {
         if (oldFrames.length > 0) {
           await Promise.all(oldFrames.map((frame: FrameData) => frameStorage.deleteFrame(frame.id)));
         }
-      } catch (error) {
-        console.error('Error clearing old cache:', error);
+      } catch {
+        // Silently fail if cache clearing fails
       }
     }
 
@@ -36,7 +36,9 @@ export function useCache() {
   // Clear cache on unmount/refresh
   useEffect(() => {
     return () => {
-      clearCache().catch(console.error);
+      clearCache().catch(() => {
+        // Silently ignore cache clearing failures
+      });
     };
   }, []);
 

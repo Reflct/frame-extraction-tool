@@ -82,17 +82,15 @@ export const VideoInput: React.FC<VideoInputProps> = ({
     input.onchange = (e: Event) => {
       const target = e.target as HTMLInputElement;
       if (!target.files || target.files.length === 0) {
-        console.error('No files selected');
         return;
       }
 
-      const imageFiles = Array.from(target.files).filter(file => 
-        file.type.startsWith('image/') || 
+      const imageFiles = Array.from(target.files).filter(file =>
+        file.type.startsWith('image/') ||
         file.name.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/)
       );
-      
+
       if (imageFiles.length === 0) {
-        console.error('No valid image files found in the selected directory');
         return;
       }
       

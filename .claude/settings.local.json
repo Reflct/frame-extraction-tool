@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:mediabunny.dev)",
+      "WebSearch",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "WebFetch(domain:docs.mediabunny.dev)",
+      "WebFetch(domain:github.com)",
+      "Bash(grep:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -50,8 +50,8 @@ export function FramePreviewDialog({
         preloadedUrls.current.set(frameToLoad.id, url);
         return url;
       }
-    } catch (error) {
-      console.error('Error loading frame:', error);
+    } catch {
+      // Error loading frame
     } finally {
       loadingFrames.current.delete(frameToLoad.id);
     }
@@ -83,7 +83,9 @@ export function FramePreviewDialog({
     const neighbors = getNeighborFrames(currentFrame);
     for (const neighbor of neighbors) {
       if (!preloadedUrls.current.has(neighbor.id)) {
-        loadFullImage(neighbor).catch(console.error);
+        loadFullImage(neighbor).catch(() => {
+          // Failed to preload neighbor
+        });
       }
     }
   }, [getNeighborFrames, loadFullImage]);
@@ -134,10 +136,12 @@ export function FramePreviewDialog({
     };
 
     loadCurrentFrame();
-    
+
     // Preload neighbors after current frame is loaded
     if (frame) {
-      preloadNeighboringFrames(frame).catch(console.error);
+      preloadNeighboringFrames(frame).catch(() => {
+        // Failed to preload neighbors
+      });
     }
 
     return () => {
@@ -211,6 +215,18 @@ export function FramePreviewDialog({
       setFrameUrl(null);
     }
   }, [open]);
+
+  // Cleanup all URLs when frames array changes (new extraction)
+  useEffect(() => {
+    const currentPreloadedUrls = preloadedUrls.current;
+    return () => {
+      // Cleanup all URLs when component unmounts or frames change
+      for (const url of currentPreloadedUrls.values()) {
+        URL.revokeObjectURL(url);
+      }
+      currentPreloadedUrls.clear();
+    };
+  }, [frames]);
 
   if (!frame) return null;
 

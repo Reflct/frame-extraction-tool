@@ -27,12 +27,10 @@ export async function getVideoMetadata(file: File): Promise<VideoMetadata> {
     const inputFileName = 'input' + file.name.substring(file.name.lastIndexOf('.'));
     
     // Use a stream-based approach for reading the file
-    console.log('Reading video file...');
     try {
       const fileData = await fetchFile(file);
       await ffmpeg.writeFile(inputFileName, fileData);
-    } catch (error) {
-      console.error('Failed to read video file:', error);
+    } catch {
       throw new Error('Could not read video file. The file may be too large or corrupted.');
     }
 
@@ -40,7 +38,6 @@ export async function getVideoMetadata(file: File): Promise<VideoMetadata> {
     let streamInfo = '';
     ffmpeg.on('log', ({ message }) => {
       streamInfo += message + '\n';
-      console.log('FFmpeg:', message);
     });
 
     try {
@@ -58,10 +55,6 @@ export async function getVideoMetadata(file: File): Promise<VideoMetadata> {
     const resolutionMatch = streamInfo.match(/\b(\d{2,5})x(\d{2,5})\b/);
     const durationMatch = streamInfo.match(/Duration:\s*(\d+):(\d+):(\d+)\.(\d+)/);
     const codecMatch = streamInfo.match(/Video:\s*(\w+)/);
-
-    // Debug logging
-    console.log('FFmpeg Stream Info:', streamInfo);
-    console.log('Resolution match:', resolutionMatch);
 
     // Require essential metadata
     if (!resolutionMatch || !durationMatch) {
@@ -113,7 +106,6 @@ export async function getVideoMetadata(file: File): Promise<VideoMetadata> {
       codec
     };
   } catch (error) {
-    console.error('Video metadata error:', error);
     throw error; // Propagate the error without wrapping it
   }
 }

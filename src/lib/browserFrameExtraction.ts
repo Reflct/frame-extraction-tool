@@ -85,7 +85,7 @@ export async function extractFramesInBrowser(
             name: fileName,
             format,
             timestamp: time,
-            data: new Uint8Array(await blob.arrayBuffer()),
+            data: new Uint8Array(0), // Empty array - data generated on demand
             storedAt: Date.now()
           });
 
@@ -128,8 +128,8 @@ export async function extractFramesInBrowser(
           };
         })
       );
-    } catch (error) {
-      console.error('Error getting existing frames:', error);
+    } catch {
+      // Error getting existing frames
     }
 
     // Return stored frames

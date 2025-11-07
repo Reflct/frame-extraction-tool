@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { type ExtractPageState, defaultState } from '@/types/frame-extraction';
-import { extractFramesInBrowser } from '@/lib/browserFrameExtraction';
+import { extractFrames } from '@/lib/frameExtractionService';
 import { calculateSharpnessScore } from '@/lib/opencvUtils';
 import { type FrameData } from '@/types/frame';
 import { getVideoMetadata } from '@/lib/videoUtils';
@@ -13,6 +13,12 @@ import { type FrameMetadata } from '@/types/frame';
 
 export function useFrameExtraction() {
   const [state, setState] = useState<ExtractPageState>(defaultState);
+  const [extractionMethod, setExtractionMethod] = useState<'MediaBunny' | 'Canvas' | null>(null);
+  const [fallbackReason, setFallbackReason] = useState<string | null>(null);
+  const [performanceMetrics, setPerformanceMetrics] = useState<{
+    duration: number;
+    framesPerSecond: number;
+  } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // State update helper with proper typing
@@ -32,10 +38,22 @@ export function useFrameExtraction() {
   const handleVideoChange = useCallback(async (file: File) => {
     if (!file) return;
 
+    const perfMemory = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+    console.log('[VIDEO_CHANGE] Starting - Memory:', perfMemory ? `${(perfMemory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
+
     // Clean up previous video URL if it exists
     if (state.videoThumbnailUrl) {
       URL.revokeObjectURL(state.videoThumbnailUrl);
     }
+
+    // Clear IndexedDB storage to prevent memory issues across sessions
+    console.log('[VIDEO_CHANGE] Clearing IndexedDB storage...');
+    await frameStorage.clear();
+    console.log('[VIDEO_CHANGE] IndexedDB cleared');
+
+    // Reset extraction method and performance metrics for new video
+    setExtractionMethod(null);
+    setPerformanceMetrics(null);
 
     updateState(prev => ({
       ...prev,
@@ -103,10 +121,23 @@ export function useFrameExtraction() {
     }
   }, [state.videoThumbnailUrl, updateState]);
 
-  const handleVideoReplace = useCallback(() => {
+  const handleVideoReplace = useCallback(async () => {
+    const perfMemory = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+    console.log('[VIDEO_REPLACE] Starting - Memory:', perfMemory ? `${(perfMemory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
+    
     if (state.videoThumbnailUrl) {
       URL.revokeObjectURL(state.videoThumbnailUrl);
     }
+    
+    // Clear IndexedDB storage to prevent memory issues across sessions
+    console.log('[VIDEO_REPLACE] Clearing IndexedDB storage...');
+    await frameStorage.clear();
+    console.log('[VIDEO_REPLACE] IndexedDB cleared');
+    
+    // Reset extraction method and performance metrics when replacing video
+    setExtractionMethod(null);
+    setPerformanceMetrics(null);
+    
     updateState(prev => ({
       ...prev,
       videoFile: null,
@@ -132,6 +163,9 @@ export function useFrameExtraction() {
   }, [updateState]);
 
   const handleExtractFrames = useCallback(async () => {
+    const perfMemory = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+    console.log('[EXTRACTION] Starting - Memory:', perfMemory ? `${(perfMemory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
+    
     if (!state.videoFile || !state.videoMetadata) {
       updateState(prev => ({
         ...prev,
@@ -147,6 +181,16 @@ export function useFrameExtraction() {
       }));
       return;
     }
+
+    // Clear IndexedDB storage before starting new extraction to prevent memory issues
+    console.log('[EXTRACTION] Clearing IndexedDB storage before extraction...');
+    await frameStorage.clear();
+    const perfMemory2 = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+    console.log('[EXTRACTION] IndexedDB cleared - Memory:', perfMemory2 ? `${(perfMemory2.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
+
+    // Reset extraction method and performance metrics before starting new extraction
+    setExtractionMethod(null);
+    setPerformanceMetrics(null);
 
     // Create new abort controller
     if (abortControllerRef.current) {
@@ -164,17 +208,18 @@ export function useFrameExtraction() {
       sharpnessProgress: { current: 0, total: 0, startTime: Date.now() },
     }));
 
-    try {
-      // Clear existing frames
-      // await frameStorage.clear();
+    // Reset extraction method at start
+    setExtractionMethod(null);
+    setFallbackReason(null);
 
-      // Extract frames with abort signal
-      const extractedFrames = await extractFramesInBrowser(
-        state.videoFile,
-        state.fps,
-        state.format,
-        state.timeRange,
-        (current: number, total: number) => {
+    try {
+      // Extract frames using the hybrid service
+      const result = await extractFrames({
+        videoFile: state.videoFile,
+        fps: state.fps,
+        format: state.format,
+        timeRange: state.timeRange,
+        onProgress: (current: number, total: number) => {
           updateState(prev => ({
             ...prev,
             extractionProgress: {
@@ -187,42 +232,115 @@ export function useFrameExtraction() {
             },
           }));
         },
+        onMethodDetermined: (method: 'MediaBunny' | 'Canvas', reason?: string) => {
+          setExtractionMethod(method);
+          setFallbackReason(reason || null);
+        },
         signal,
-        state.prefix,
-        state.useOriginalFrameRate,
-        state.videoMetadata?.fps
-      );
+        prefix: state.prefix,
+        useOriginalFrameRate: state.useOriginalFrameRate,
+        originalFps: state.videoMetadata?.fps,
+        videoMetadata: state.videoMetadata
+      });
+
+      const { frames: extractedFrames, method, performance, fallbackReason: reason } = result;
+
+      const perfMemory3 = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+      console.log('[EXTRACTION] Frames extracted:', extractedFrames.length, '- Memory:', perfMemory3 ? `${(perfMemory3.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
+      
+      // Store method and performance metrics
+      setExtractionMethod(method);
+      setFallbackReason(reason || null);
+      setPerformanceMetrics({
+        duration: performance.duration,
+        framesPerSecond: performance.framesPerSecond
+      });
       
       if (signal.aborted) {
         throw new DOMException('Aborted', 'AbortError');
       }
 
-      // Create FrameData objects with initial sharpness scores
-      const frames = await Promise.all(
-        extractedFrames.map(async (frame: { id: string; blob: Blob; name: string; format: string; timestamp: number }, index) => {
-          const arrayBuffer = await frame.blob.arrayBuffer();
-          const data = new Uint8Array(arrayBuffer);
+      // Create FrameData objects with sharpness scores (parallel processing)
+      const totalFrames = extractedFrames.length;
+      const SHARPNESS_BATCH_SIZE = 10; // Process 10 frames at a time for sharpness
+      
+      console.log('[EXTRACTION] Starting sharpness calculation for', totalFrames, 'frames');
+      
+      // Update state to show sharpness calculation progress
+      updateState(prev => ({
+        ...prev,
+        sharpnessProgress: { current: 0, total: totalFrames, startTime: Date.now() }
+      }));
+      
+      const frames: FrameData[] = [];
+      
+      // Process sharpness in batches for better performance and progress reporting
+      for (let i = 0; i < totalFrames; i += SHARPNESS_BATCH_SIZE) {
+        if (signal.aborted) {
+          throw new DOMException('Aborted', 'AbortError');
+        }
+        
+        const batch = extractedFrames.slice(i, i + SHARPNESS_BATCH_SIZE);
+        
+        // Process batch in parallel - no unnecessary buffer conversions
+        const batchPromises = batch.map(async (frame) => {
+          // Calculate sharpness directly from blob
           const sharpnessScore = await calculateSharpnessScore(frame.blob);
+          
+          // Don't store blob in React state to prevent memory leaks
           return {
             id: frame.id,
             name: frame.name,
             format: frame.format,
             sharpnessScore,
-            blob: frame.blob,
-            timestamp: (index / state.fps) * 1000, // Convert to milliseconds
-            data,
-            selected: false // Initialize selection state
+            timestamp: frame.timestamp * 1000, // Use actual timestamp from MediaBunny, convert to milliseconds
+            selected: false
           } as FrameData;
-        })
-      );
+        });
+        
+        // Wait for batch completion
+        const batchResults = await Promise.all(batchPromises);
+        frames.push(...batchResults);
+        
+        // Clear batch references to free memory
+        batchPromises.length = 0;
+        
+        // Update progress after each batch
+        updateState(prev => ({
+          ...prev,
+          sharpnessProgress: {
+            current: Math.min(i + SHARPNESS_BATCH_SIZE, totalFrames),
+            total: totalFrames,
+            startTime: prev.sharpnessProgress.startTime,
+            estimatedTimeMs: prev.sharpnessProgress.startTime
+              ? ((Date.now() - prev.sharpnessProgress.startTime) / (i + SHARPNESS_BATCH_SIZE)) * 
+                  Math.ceil((totalFrames - i - SHARPNESS_BATCH_SIZE) / SHARPNESS_BATCH_SIZE)
+              : undefined,
+          }
+        }));
+        
+        // Small delay to keep UI responsive
+        if (i + SHARPNESS_BATCH_SIZE < totalFrames) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      }
 
+      const perfMemory4 = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+      console.log('[EXTRACTION] Sharpness calculation complete - Memory:', perfMemory4 ? `${(perfMemory4.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
+      console.log('[EXTRACTION] Updating state with', frames.length, 'frames (metadata only, no blobs)');
+      
       // Update state with processed frames
       updateState(prev => ({
         ...prev,
         frames,
         processing: false,
-        extractionProgress: { current: 0, total: 0 }
+        extractionProgress: { current: 0, total: 0 },
+        sharpnessProgress: { current: 0, total: 0 } // Clear sharpness progress
       }));
+      
+      const perfMemory5 = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+      console.log('[EXTRACTION] Complete - Memory:', perfMemory5 ? `${(perfMemory5.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
+      console.log('[EXTRACTION] State updated, extraction finished');
     } catch (error) {
       console.error('Error in frame extraction:', error);
       
@@ -317,7 +435,7 @@ export function useFrameExtraction() {
       if (state.videoThumbnailUrl) {
         URL.revokeObjectURL(state.videoThumbnailUrl);
       }
-      // await frameStorage.clear();
+      await frameStorage.clear();
       updateState(prev => ({
         ...defaultState,
         selectionMode: prev.selectionMode,
@@ -411,15 +529,11 @@ export function useFrameExtraction() {
                   // Store metadata in memory for UI
                   frameMetadata.push(metadata);
 
-                  // Get array buffer and store complete frame data in IndexedDB
-                  const arrayBuffer = await file.arrayBuffer();
-                  console.log(`Got array buffer for ${file.name}, size: ${arrayBuffer.byteLength} bytes`);
-                  
-                  const data = new Uint8Array(arrayBuffer);
+                  // Store frame data in IndexedDB without redundant buffer conversion
                   await frameStorage.storeFrame({
                     ...metadata,
                     blob: file,
-                    data,
+                    data: new Uint8Array(0), // Empty array - data generated on demand
                     storedAt: Date.now(),
                   });
 
@@ -488,23 +602,31 @@ export function useFrameExtraction() {
     }, [updateState]);
 
   const handleSelectAll = useCallback(() => {
-    updateState(prev => ({
-      ...prev,
-      frames: prev.frames.map(frame => ({
+    updateState(prev => {
+      // Batch update all frames in single pass
+      const updatedFrames = prev.frames.map(frame => ({
         ...frame,
         selected: true
-      }))
-    }));
+      }));
+      return {
+        ...prev,
+        frames: updatedFrames
+      };
+    });
   }, [updateState]);
 
   const handleDeselectAll = useCallback(() => {
-    updateState(prev => ({
-      ...prev,
-      frames: prev.frames.map(frame => ({
+    updateState(prev => {
+      // Batch update all frames in single pass
+      const updatedFrames = prev.frames.map(frame => ({
         ...frame,
         selected: false
-      }))
-    }));
+      }));
+      return {
+        ...prev,
+        frames: updatedFrames
+      };
+    });
   }, [updateState]);
 
   const handleSelectionModeChange = useCallback((mode: 'batched' | 'manual' | 'best-n' | 'top-percent') => {
@@ -551,6 +673,9 @@ export function useFrameExtraction() {
   return {
     state,
     setState: updateState,
+    extractionMethod,
+    fallbackReason,
+    performanceMetrics,
     handlers: {
       handleVideoChange,
       handleVideoReplace,

@@ -1,4 +1,4 @@
-export async function createThumbnail(blob: Blob, maxWidth: number = 192): Promise<Blob> {
+export async function createThumbnail(blob: Blob, maxWidth: number = 150): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(blob);
@@ -22,9 +22,9 @@ export async function createThumbnail(blob: Blob, maxWidth: number = 192): Promi
         return;
       }
 
-      // Use better quality settings
+      // Balance speed and quality
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
+      ctx.imageSmoothingQuality = 'medium';
       
       ctx.drawImage(img, 0, 0, width, height);
 
@@ -35,7 +35,7 @@ export async function createThumbnail(blob: Blob, maxWidth: number = 192): Promi
           else reject(new Error('Failed to create thumbnail blob'));
         },
         'image/jpeg',
-        0.8
+        0.75
       );
     };
 

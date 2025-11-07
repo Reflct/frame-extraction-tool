@@ -61,14 +61,15 @@ export async function closeDatabase(): Promise<void> {
 }
 
 // Initialize the database when the module loads
-openDatabase().catch(console.error);
+openDatabase().catch(() => {
+  // Silently fail on database initialization
+});
 
 export const frameStorage = {
   async clear(): Promise<void> {
     try {
       await clearObjectStore();
-    } catch (error) {
-      console.error('Error clearing frame storage:', error);
+    } catch {
       // If clearing fails, try closing and reopening the database
       await closeDatabase();
       await openDatabase();

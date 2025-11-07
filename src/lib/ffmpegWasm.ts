@@ -10,14 +10,6 @@ const CHUNK_DURATION = 2; // 2 seconds per chunk
 
 async function initFfmpeg() {
   const ffmpeg = new FFmpeg();
-  
-  ffmpeg.on('progress', ({ progress }) => {
-    console.log(`FFmpeg Progress: ${Math.round(progress * 100)}%`);
-  });
-
-  ffmpeg.on('log', ({ message }) => {
-    console.log('FFmpeg log: ', message);
-  });
 
   try {
     await ffmpeg.load({
@@ -25,10 +17,8 @@ async function initFfmpeg() {
       wasmURL: '/ffmpeg-core.wasm',
       workerURL: '/ffmpeg-core.worker.js'
     });
-    console.log('FFmpeg loaded successfully');
     return ffmpeg;
   } catch (error) {
-    console.error('Failed to load FFmpeg:', error);
     throw error;
   }
 }
@@ -73,7 +63,6 @@ export async function extractFramesFromChunk(
     `frame_%d.${format}`
   ];
 
-  console.log('Running FFmpeg with args:', args);
   await ffmpeg.exec(args);
 
   // Get list of generated frames
@@ -93,7 +82,6 @@ export async function extractFramesFromChunk(
     try {
       const frameData = await ffmpeg.readFile(filename);
       if (!(frameData instanceof Uint8Array)) {
-        console.warn(`Skipping frame ${filename}: invalid data type`);
         continue;
       }
 
@@ -109,8 +97,8 @@ export async function extractFramesFromChunk(
         storedAt: Date.now()
       });
       frameCount++;
-    } catch (error) {
-      console.error(`Error processing frame ${filename}:`, error);
+    } catch {
+      // Error processing frame
     }
   }
 
@@ -127,26 +115,20 @@ export async function extractFrames(
 
   try {
     // Write the full video file
-    console.log('Loading video file...');
     const fileData = await fetchFile(videoFile);
     await ffmpeg.writeFile('input.MP4', fileData);
-    
+
     // Get video metadata from videoUtils
-    console.log('Analyzing video...');
     const metadata = await getVideoMetadata(videoFile);
-    console.log('Video metadata:', metadata);
-    
+
     // Calculate number of chunks based on video duration
     const chunks = Math.ceil(metadata.duration / CHUNK_DURATION);
-    console.log(`Processing video in ${chunks} chunks of ${CHUNK_DURATION} seconds each`);
 
     // Process each chunk
     for (let i = 0; i < chunks; i++) {
       const startTime = i * CHUNK_DURATION;
       const currentDuration = Math.min(CHUNK_DURATION, metadata.duration - startTime);
 
-      console.log(`Processing chunk ${i + 1}/${chunks} (${startTime}s - ${startTime + currentDuration}s)`);
-      
       try {
         const frameCount = await extractFramesFromChunk(
           ffmpeg,
@@ -159,25 +141,22 @@ export async function extractFrames(
         totalFrames += frameCount;
 
         // Reinitialize FFmpeg for next chunk
-        console.log('Reinitializing FFmpeg...');
         await ffmpeg.terminate();
         ffmpegInstance = null;
-        
+
         if (i < chunks - 1) { // Don't reinitialize if this was the last chunk
           ffmpeg = await getFfmpeg();
           // Rewrite the video file for the next chunk using fetchFile
           const fileData = await fetchFile(videoFile);
           await ffmpeg.writeFile('input.MP4', fileData);
         }
-      } catch (error) {
-        console.error(`Error processing chunk ${i}:`, error);
+      } catch {
         // Continue with next chunk even if this one fails
       }
     }
 
     return totalFrames;
   } catch (error) {
-    console.error('Error extracting frames:', error);
     throw error;
   } finally {
     // Ensure FFmpeg is cleaned up even if there was an error
@@ -185,8 +164,8 @@ export async function extractFrames(
       try {
         await ffmpeg.terminate();
         ffmpegInstance = null;
-      } catch (error) {
-        console.error('Error cleaning up FFmpeg:', error);
+      } catch {
+        // Error cleaning up FFmpeg
       }
     }
   }
@@ -197,26 +176,21 @@ export async function resizeVideo(
   targetWidth: number
 ): Promise<Uint8Array> {
   let ffmpeg: FFmpeg | null = null;
-  
+
   try {
-    console.log('Initializing FFmpeg...');
     ffmpeg = await getFfmpeg();
-    
-    console.log('Loading video for resize...');
+
     const fileData = await fetchFile(videoFile);
     const inputFileName = 'input' + Date.now() + '.mp4';
     const outputFileName = 'output' + Date.now() + '.mp4';
-    
-    console.log('Writing input file...');
+
     await ffmpeg.writeFile(inputFileName, fileData);
-    
+
     // Get video metadata for aspect ratio calculation
     const metadata = await getVideoMetadata(videoFile);
     const aspectRatio = metadata.width / metadata.height;
     const targetHeight = Math.round(targetWidth / aspectRatio);
-    
-    console.log(`Resizing video to ${targetWidth}x${targetHeight}...`);
-    
+
     const args = [
       '-i', inputFileName,
       '-vf', `scale=${targetWidth}:${targetHeight}`,
@@ -225,36 +199,32 @@ export async function resizeVideo(
       '-crf', '23',
       outputFileName
     ];
-    
-    console.log('Running FFmpeg with args:', args);
+
     await ffmpeg.exec(args);
-    
-    console.log('Reading output file...');
+
     const data = await ffmpeg.readFile(outputFileName);
     if (!(data instanceof Uint8Array)) {
       throw new Error('Failed to read resized video');
     }
-    
+
     // Clean up files
-    console.log('Cleaning up...');
     try {
       await ffmpeg.deleteFile(inputFileName);
       await ffmpeg.deleteFile(outputFileName);
-    } catch (error) {
-      console.warn('Error cleaning up files:', error);
+    } catch {
+      // Error cleaning up files
     }
-    
+
     return data;
   } catch (error) {
-    console.error('Error during video resize:', error);
     throw error;
   } finally {
     if (ffmpeg) {
       try {
         await ffmpeg.terminate();
         ffmpegInstance = null;
-      } catch (error) {
-        console.error('Error cleaning up FFmpeg:', error);
+      } catch {
+        // Error cleaning up FFmpeg
       }
     }
   }

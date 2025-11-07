@@ -42,21 +42,44 @@ export function FrameAnalysis({
   const loadingThumbnails = useRef<Set<string>>(new Set());
   const chartRef = useRef<HTMLDivElement>(null);
 
+  // Component lifecycle logging
+  useEffect(() => {
+    console.log('[FRAME_ANALYSIS] Component mounted');
+    return () => {
+      console.log('[FRAME_ANALYSIS] Component unmounting, cleaning up', thumbnailUrls.size, 'thumbnail URLs');
+    };
+  }, [thumbnailUrls]);
+
   // Load thumbnails when frames change
   useEffect(() => {
-    const newUrls = new Map<string, string>(thumbnailUrls);
+    console.log('[FRAME_ANALYSIS] Frames changed, count:', frames.length);
+    
+    // Create a Set of current frame IDs for fast lookup
+    const currentFrameIds = new Set(frames.map(f => f.id));
+    const newUrls = new Map<string, string>();
     
     // Cleanup URLs for frames that no longer exist
     for (const [id, url] of thumbnailUrls.entries()) {
-      if (!frames.some(frame => frame.id === id)) {
+      if (currentFrameIds.has(id)) {
+        // Keep existing thumbnail URL if frame still exists
+        newUrls.set(id, url);
+      } else {
+        // Revoke URL for frames that no longer exist
         URL.revokeObjectURL(url);
-        newUrls.delete(id);
       }
+    }
+    
+    console.log('[FRAME_ANALYSIS] Cleaned up stale thumbnails:', thumbnailUrls.size - newUrls.size);
+    
+    // Update state immediately if we cleaned up any stale entries
+    if (newUrls.size !== thumbnailUrls.size) {
+      setThumbnailUrls(newUrls);
     }
 
     // Load missing thumbnails
     async function loadMissingThumbnails() {
       const missingFrames = frames.filter(frame => !newUrls.has(frame.id));
+      console.log('[FRAME_ANALYSIS] Loading thumbnails for', missingFrames.length, 'frames');
       
       for (const frame of missingFrames) {
         if (loadingThumbnails.current.has(frame.id)) continue;
@@ -66,8 +89,16 @@ export function FrameAnalysis({
           const thumbnail = await frameStorage.getFrameThumbnail(frame.id);
           if (thumbnail) {
             const url = URL.createObjectURL(thumbnail);
-            newUrls.set(frame.id, url);
-            setThumbnailUrls(new Map(newUrls));
+            setThumbnailUrls(prev => {
+              // Double-check the frame still exists before adding
+              if (currentFrameIds.has(frame.id)) {
+                return new Map(prev.set(frame.id, url));
+              } else {
+                // Frame was removed while loading, clean up
+                URL.revokeObjectURL(url);
+                return prev;
+              }
+            });
           }
         } catch (error) {
           console.error(`Failed to load thumbnail for frame ${frame.id}:`, error);
@@ -80,11 +111,9 @@ export function FrameAnalysis({
     loadMissingThumbnails();
 
     return () => {
-      // Only cleanup URLs for frames that no longer exist
-      for (const [id, url] of thumbnailUrls.entries()) {
-        if (!frames.some(frame => frame.id === id)) {
-          URL.revokeObjectURL(url);
-        }
+      // Cleanup all URLs on unmount
+      for (const url of thumbnailUrls.values()) {
+        URL.revokeObjectURL(url);
       }
     };
   }, [frames, thumbnailUrls]);
@@ -94,6 +123,10 @@ export function FrameAnalysis({
     if (!hoveredFrame?.id || thumbnailUrls.has(hoveredFrame.id)) return;
 
     const frameId = hoveredFrame.id; // Store id to avoid null checks
+    
+    // Verify the frame exists in the current frames list
+    const frameExists = frames.some(f => f.id === frameId);
+    if (!frameExists) return;
 
     async function loadHoveredThumbnail() {
       if (loadingThumbnails.current.has(frameId)) return;
@@ -103,7 +136,17 @@ export function FrameAnalysis({
         const thumbnail = await frameStorage.getFrameThumbnail(frameId);
         if (thumbnail) {
           const url = URL.createObjectURL(thumbnail);
-          setThumbnailUrls(prev => new Map(prev.set(frameId, url)));
+          setThumbnailUrls(prev => {
+            // Double-check the frame still exists before adding
+            const stillExists = frames.some(f => f.id === frameId);
+            if (stillExists) {
+              return new Map(prev.set(frameId, url));
+            } else {
+              // Frame was removed while loading, clean up
+              URL.revokeObjectURL(url);
+              return prev;
+            }
+          });
         }
       } catch (error) {
         console.error(`Failed to load thumbnail for hovered frame ${frameId}:`, error);
@@ -113,7 +156,7 @@ export function FrameAnalysis({
     }
 
     loadHoveredThumbnail();
-  }, [hoveredFrame, thumbnailUrls]);
+  }, [hoveredFrame, thumbnailUrls, frames]);
 
   // Get thumbnail URL for a frame
   const getThumbnailUrl = useCallback((frameId: string) => {
@@ -133,7 +176,7 @@ export function FrameAnalysis({
           fill
           className="object-cover"
           sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 16vw"
-          priority={true}
+          loading="lazy"
         />
       </div>
     );
@@ -228,7 +271,12 @@ export function FrameAnalysis({
             variant="outline"
             size="sm"
             onClick={() => {
-              frames.forEach(frame => onFrameSelectAction(frame.id));
+              // Batch selection - trigger single update for all frames
+              frames.forEach(frame => {
+                if (!selectedFrames.has(frame.id)) {
+                  onFrameSelectAction(frame.id);
+                }
+              });
             }}
           >
             Select All
@@ -237,7 +285,10 @@ export function FrameAnalysis({
             variant="outline"
             size="sm"
             onClick={() => {
-              Array.from(selectedFrames).forEach(frameId => onFrameSelectAction(frameId));
+              // Batch deselection - trigger single update for all selected frames
+              Array.from(selectedFrames).forEach(frameId => {
+                onFrameSelectAction(frameId);
+              });
             }}
           >
             Deselect All

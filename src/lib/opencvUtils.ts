@@ -86,16 +86,30 @@ export async function calculateSharpnessScore(imageBlob: Blob): Promise<number> 
   let mat: Mat | null = null;
   let gray: Mat | null = null;
   let laplacian: Mat | null = null;
+  let url: string | null = null;
   
   try {
-    // Convert Blob to ImageData
+    // Convert Blob to ImageData with downscaling for performance
     const img = await createImageElement(imageBlob);
+    url = img.src; // Store URL for cleanup
+    
+    // Downscale to max 800px width for faster processing
+    const maxWidth = 800;
+    const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+    const scaledWidth = Math.floor(img.width * scale);
+    const scaledHeight = Math.floor(img.height * scale);
+    
     const canvas = document.createElement('canvas');
-    canvas.width = img.width;
-    canvas.height = img.height;
+    canvas.width = scaledWidth;
+    canvas.height = scaledHeight;
     const ctx = canvas.getContext('2d')!;
-    ctx.drawImage(img, 0, 0);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    
+    // Use better image smoothing for downscaling
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, scaledWidth, scaledHeight);
+    
+    const imageData = ctx.getImageData(0, 0, scaledWidth, scaledHeight);
     
     // Convert to OpenCV matrix
     mat = cv.matFromImageData(imageData);
@@ -122,21 +136,34 @@ export async function calculateSharpnessScore(imageBlob: Blob): Promise<number> 
     
     return scaledScore;
   } catch (error) {
-    console.error('Error in sharpness detection:', error);
     throw new Error(`Failed to calculate sharpness score: ${error}`);
   } finally {
     // Clean up OpenCV matrices
     if (mat) mat.delete();
     if (gray) gray.delete();
     if (laplacian) laplacian.delete();
+    
+    // Revoke object URL to prevent memory leak
+    if (url) {
+      URL.revokeObjectURL(url);
+    }
   }
 }
 
 function createImageElement(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    
+    img.onload = () => {
+      // Store URL on image for cleanup
+      img.src = url;
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image'));
+    };
+    img.src = url;
   });
 }

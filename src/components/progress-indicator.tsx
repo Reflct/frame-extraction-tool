@@ -6,12 +6,14 @@ import { Loader2 } from 'lucide-react';
 interface ProgressIndicatorProps {
   extractionProgress: ProgressInfo;
   sharpnessProgress: ProgressInfo;
+  extractionMethod?: 'MediaBunny' | 'Canvas' | null;
   onCancelAction: () => void;
 }
 
 export function ProgressIndicator({
   extractionProgress,
   sharpnessProgress,
+  extractionMethod,
   onCancelAction,
 }: ProgressIndicatorProps) {
   // Format time remaining
@@ -27,7 +29,14 @@ export function ProgressIndicator({
     <div className="space-y-4">
       <div>
         <div className="flex justify-between text-sm mb-1">
-          <span>Extracting Frames</span>
+          <div className="flex items-center gap-2">
+            <span>Extracting Frames</span>
+            {extractionMethod && (
+              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                {extractionMethod}
+              </span>
+            )}
+          </div>
           <span>
             {extractionProgress.current}/{extractionProgress.total}
             {extractionProgress.estimatedTimeMs && (

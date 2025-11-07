@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ExtractionControls } from '@/components/extraction-controls';
+import { ExtractionMethodIndicator } from '@/components/extraction-method-indicator';
 import { ProgressIndicator } from '@/components/progress-indicator';
 import { TimeRangeDialog } from '@/components/time-range-dialog';
 import { type VideoMetadata } from '@/lib/videoUtils';
@@ -20,6 +21,12 @@ interface ExtractionSettingsCardProps {
   sharpnessProgress: ProgressInfo;
   timeRange: [number, number];
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  extractionMethod?: 'MediaBunny' | 'Canvas' | null;
+  fallbackReason?: string | null;
+  performanceMetrics?: {
+    duration: number;
+    framesPerSecond: number;
+  } | null;
   onFpsChangeAction: (fps: number) => void;
   onFormatChangeAction: (format: 'jpeg' | 'png') => void;
   onPrefixChangeAction: (prefix: string) => void;
@@ -40,6 +47,9 @@ export function ExtractionSettingsCard({
   sharpnessProgress,
   timeRange,
   videoRef,
+  extractionMethod,
+  fallbackReason,
+  performanceMetrics,
   onFpsChangeAction,
   onFormatChangeAction,
   onPrefixChangeAction,
@@ -57,6 +67,15 @@ export function ExtractionSettingsCard({
           <h2 className="text-xl font-semibold">Extraction Settings</h2>
         </div>
         <div className="max-w-lg">
+          <div className="space-y-4 mb-6">
+            <ExtractionMethodIndicator 
+              currentMethod={extractionMethod}
+              fallbackReason={fallbackReason}
+              performanceMetrics={performanceMetrics}
+              processing={processing}
+              videoFile={videoMetadata ? null : null}
+            />
+          </div>
           {!processing ? (
             <div className="space-y-6">
               <ExtractionControls
@@ -91,6 +110,7 @@ export function ExtractionSettingsCard({
               <ProgressIndicator
                 extractionProgress={extractionProgress}
                 sharpnessProgress={sharpnessProgress}
+                extractionMethod={extractionMethod}
                 onCancelAction={onCancelAction}
               />
             </div>

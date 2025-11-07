@@ -11,7 +11,7 @@ import { useFrameExtraction } from '@/hooks/use-frame-extraction';
 import { getSelectedFrames, getSelectedFramesCount } from '@/utils/frame-selection';
 
 export default function ExtractPage() {
-  const { state, setState, handlers } = useFrameExtraction();
+  const { state, setState, extractionMethod, fallbackReason, performanceMetrics, handlers } = useFrameExtraction();
   const videoRef = useRef<HTMLVideoElement | null>(null) as React.RefObject<HTMLVideoElement>;
 
   return (
@@ -49,6 +49,9 @@ export default function ExtractPage() {
             sharpnessProgress={state.sharpnessProgress}
             timeRange={state.timeRange}
             videoRef={videoRef}
+            extractionMethod={extractionMethod}
+            fallbackReason={fallbackReason}
+            performanceMetrics={performanceMetrics}
             onFpsChangeAction={(fps) => setState(prev => ({ ...prev, fps }))}
             onFormatChangeAction={(format) => setState(prev => ({ ...prev, format }))}
             onPrefixChangeAction={(prefix) => setState(prev => ({ ...prev, prefix }))}

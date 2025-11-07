@@ -66,14 +66,13 @@ class FrameStorage {
           }
         },
         blocked() {
-          console.warn('Database upgrade blocked. Please close other tabs using this app.');
+          // Database upgrade blocked - another tab is using this app
         },
         terminated() {
-          console.error('Database connection terminated unexpectedly.');
+          // Database connection terminated unexpectedly
         }
       });
-    } catch (error) {
-      console.error('Failed to initialize database:', error);
+    } catch {
       // Try to recover by deleting and recreating the database
       await this.delete();
       this.db = await openDB<FrameDBSchema>(this.dbName, this.version, {
@@ -104,10 +103,10 @@ class FrameStorage {
         blob: thumbnail,
         timestamp: frame.timestamp
       });
-    } catch (error) {
-      console.error('Failed to create thumbnail:', error);
+    } catch {
+      // Failed to create thumbnail - continue without it
     }
-    
+
     // Store metadata separately
     const metadata: FrameMetadata = {
       id: frame.id,
@@ -118,6 +117,95 @@ class FrameStorage {
       selected: frame.selected,
     };
     await this.db!.put(this.metadataStore, metadata);
+  }
+
+  async storeFrameBatch(frames: StoredFrameData[], options: { skipThumbnails?: boolean } = {}) {
+    if (!this.db) await this.init();
+    
+    const stores = options.skipThumbnails 
+      ? [this.frameStore, this.metadataStore]
+      : [this.frameStore, this.metadataStore, this.thumbnailStore];
+    
+    const transaction = this.db!.transaction(stores, 'readwrite');
+    
+    try {
+      // Batch all frame and metadata operations (no awaiting inside map)
+      const operations = frames.map(async (frame) => {
+        // Store full frame data
+        const framePromise = transaction.objectStore(this.frameStore).put(frame);
+        
+        // Store metadata
+        const metadata: FrameMetadata = {
+          id: frame.id,
+          name: frame.name,
+          timestamp: frame.timestamp,
+          format: frame.format,
+          sharpnessScore: frame.sharpnessScore,
+          selected: frame.selected,
+        };
+        const metadataPromise = transaction.objectStore(this.metadataStore).put(metadata);
+        
+        return Promise.all([framePromise, metadataPromise]);
+      });
+      
+      // Execute all operations in parallel
+      await Promise.all(operations);
+      await transaction.done;
+      
+      // Generate thumbnails lazily in background (don't block extraction)
+      if (!options.skipThumbnails) {
+        this.generateThumbnailsAsync(frames).catch(() => {
+          // Background thumbnail generation failed
+        });
+      }
+    } catch (error) {
+      transaction.abort();
+      throw error;
+    }
+  }
+  
+  // Background thumbnail generation (non-blocking)
+  private async generateThumbnailsAsync(frames: StoredFrameData[]) {
+    if (!this.db) return;
+    
+    // Process thumbnails in smaller batches to avoid blocking UI
+    const THUMBNAIL_BATCH_SIZE = 8;
+    
+    for (let i = 0; i < frames.length; i += THUMBNAIL_BATCH_SIZE) {
+      const batch = frames.slice(i, i + THUMBNAIL_BATCH_SIZE);
+      
+      try {
+        const thumbnailPromises = batch.map(async (frame) => {
+          try {
+            const thumbnail = await createThumbnail(frame.blob);
+            return {
+              id: frame.id,
+              blob: thumbnail,
+              timestamp: frame.timestamp
+            };
+          } catch {
+            return null;
+          }
+        });
+        
+        const thumbnails = (await Promise.all(thumbnailPromises)).filter(t => t !== null);
+        
+        if (thumbnails.length > 0) {
+          const transaction = this.db.transaction([this.thumbnailStore], 'readwrite');
+          await Promise.all(
+            thumbnails.map(thumbnail => 
+              transaction.objectStore(this.thumbnailStore).put(thumbnail)
+            )
+          );
+          await transaction.done;
+        }
+        
+        // Small delay between batches to keep UI responsive
+        await new Promise(resolve => setTimeout(resolve, 5));
+      } catch {
+        // Continue with next batch even if this one fails
+      }
+    }
   }
 
   async getFrameThumbnail(id: string): Promise<Blob | undefined> {
