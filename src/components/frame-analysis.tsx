@@ -4,10 +4,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BarChart, Bar, YAxis, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { type FrameData, type FrameMetadata } from '@/types/frame';
-import Image from 'next/image';
 import { FramePreviewDialog } from './frame-preview-dialog';
 import { frameStorage } from '@/lib/frameStorage';
 import { ChartTooltip } from './chart-tooltip';
+import { ThumbnailCache } from '@/lib/thumbnailCache';
 
 interface FrameAnalysisProps {
   frames: FrameData[];
@@ -38,127 +38,123 @@ export function FrameAnalysis({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [frameData, setFrameData] = useState<Record<string, Uint8Array>>({});
   const convertingRef = useRef<Record<string, boolean>>({});
+  
+  // NEW: Replace Map with ThumbnailCache for memory-efficient thumbnail management
+  const thumbnailCache = useRef<ThumbnailCache>(new ThumbnailCache(200));
   const [thumbnailUrls, setThumbnailUrls] = useState<Map<string, string>>(new Map());
-  const loadingThumbnails = useRef<Set<string>>(new Set());
+  const loadedThumbnails = useRef<Set<string>>(new Set()); // Track what we've loaded to avoid duplicates
   const chartRef = useRef<HTMLDivElement>(null);
+  const preloadTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Component lifecycle logging
+  // Component lifecycle - cleanup cache on unmount
   useEffect(() => {
     console.log('[FRAME_ANALYSIS] Component mounted');
+    const cache = thumbnailCache.current;
+    const loaded = loadedThumbnails.current;
     return () => {
-      console.log('[FRAME_ANALYSIS] Component unmounting, cleaning up', thumbnailUrls.size, 'thumbnail URLs');
+      const stats = cache.getStats();
+      console.log('[FRAME_ANALYSIS] Component unmounting, cache stats:', stats);
+      cache.clear();
+      loaded.clear();
     };
-  }, [thumbnailUrls]);
+  }, []);
 
-  // Load thumbnails when frames change
+  // Reset loaded thumbnails tracker when frames change
   useEffect(() => {
-    console.log('[FRAME_ANALYSIS] Frames changed, count:', frames.length);
-    
-    // Create a Set of current frame IDs for fast lookup
-    const currentFrameIds = new Set(frames.map(f => f.id));
-    const newUrls = new Map<string, string>();
-    
-    // Cleanup URLs for frames that no longer exist
-    for (const [id, url] of thumbnailUrls.entries()) {
-      if (currentFrameIds.has(id)) {
-        // Keep existing thumbnail URL if frame still exists
-        newUrls.set(id, url);
-      } else {
-        // Revoke URL for frames that no longer exist
-        URL.revokeObjectURL(url);
-      }
-    }
-    
-    console.log('[FRAME_ANALYSIS] Cleaned up stale thumbnails:', thumbnailUrls.size - newUrls.size);
-    
-    // Update state immediately if we cleaned up any stale entries
-    if (newUrls.size !== thumbnailUrls.size) {
-      setThumbnailUrls(newUrls);
-    }
+    loadedThumbnails.current.clear();
+    setThumbnailUrls(new Map());
+  }, [frames.length]);
 
-    // Load missing thumbnails
-    async function loadMissingThumbnails() {
-      const missingFrames = frames.filter(frame => !newUrls.has(frame.id));
-      console.log('[FRAME_ANALYSIS] Loading thumbnails for', missingFrames.length, 'frames');
+  // NEW: Load thumbnails ONLY for selected frames (grid display)
+  // This replaces the bulk loading that was loading ALL frames
+  useEffect(() => {
+    if (frames.length === 0) return;
+    
+    console.log('[FRAME_ANALYSIS] Loading thumbnails for', selectedFrames.size, 'selected frames');
+    
+    const loadSelectedThumbnails = async () => {
+      const selectedFrameIds = Array.from(selectedFrames);
       
-      for (const frame of missingFrames) {
-        if (loadingThumbnails.current.has(frame.id)) continue;
+      // Collect all URLs in a single batch to avoid state update issues
+      const newUrls = new Map<string, string>();
+      
+      // Load each thumbnail
+      for (const frameId of selectedFrameIds) {
+        // Skip if already loaded
+        if (loadedThumbnails.current.has(frameId)) continue;
         
-        try {
-          loadingThumbnails.current.add(frame.id);
-          const thumbnail = await frameStorage.getFrameThumbnail(frame.id);
-          if (thumbnail) {
-            const url = URL.createObjectURL(thumbnail);
-            setThumbnailUrls(prev => {
-              // Double-check the frame still exists before adding
-              if (currentFrameIds.has(frame.id)) {
-                return new Map(prev.set(frame.id, url));
-              } else {
-                // Frame was removed while loading, clean up
-                URL.revokeObjectURL(url);
-                return prev;
-              }
-            });
-          }
-        } catch (error) {
-          console.error(`Failed to load thumbnail for frame ${frame.id}:`, error);
-        } finally {
-          loadingThumbnails.current.delete(frame.id);
+        // Mark as loading to prevent duplicates
+        loadedThumbnails.current.add(frameId);
+        
+        // Load from cache (will fetch if not cached)
+        const url = await thumbnailCache.current.get(frameId);
+        if (url) {
+          newUrls.set(frameId, url);
         }
       }
-    }
-
-    loadMissingThumbnails();
-
-    return () => {
-      // Cleanup all URLs on unmount
-      for (const url of thumbnailUrls.values()) {
-        URL.revokeObjectURL(url);
+      
+      // Single state update with all loaded URLs
+      if (newUrls.size > 0) {
+        setThumbnailUrls(prev => {
+          const merged = new Map(prev);
+          newUrls.forEach((url, id) => merged.set(id, url));
+          return merged;
+        });
+        console.log('[FRAME_ANALYSIS] Loaded', newUrls.size, 'thumbnails');
       }
     };
-  }, [frames, thumbnailUrls]);
-
-  // Load thumbnail for hovered frame immediately
-  useEffect(() => {
-    if (!hoveredFrame?.id || thumbnailUrls.has(hoveredFrame.id)) return;
-
-    const frameId = hoveredFrame.id; // Store id to avoid null checks
     
-    // Verify the frame exists in the current frames list
-    const frameExists = frames.some(f => f.id === frameId);
-    if (!frameExists) return;
+    loadSelectedThumbnails();
+  }, [selectedFrames, frames.length]);
 
-    async function loadHoveredThumbnail() {
-      if (loadingThumbnails.current.has(frameId)) return;
-      
-      try {
-        loadingThumbnails.current.add(frameId);
-        const thumbnail = await frameStorage.getFrameThumbnail(frameId);
-        if (thumbnail) {
-          const url = URL.createObjectURL(thumbnail);
-          setThumbnailUrls(prev => {
-            // Double-check the frame still exists before adding
-            const stillExists = frames.some(f => f.id === frameId);
-            if (stillExists) {
-              return new Map(prev.set(frameId, url));
-            } else {
-              // Frame was removed while loading, clean up
-              URL.revokeObjectURL(url);
-              return prev;
-            }
-          });
-        }
-      } catch (error) {
-        console.error(`Failed to load thumbnail for hovered frame ${frameId}:`, error);
-      } finally {
-        loadingThumbnails.current.delete(frameId);
-      }
+  // NEW: Smart preloading for hovered frame + nearby frames
+  // This prevents loading thousands of thumbnails as user hovers across chart
+  useEffect(() => {
+    if (!hoveredFrame) return;
+    
+    // Clear any pending preload
+    if (preloadTimerRef.current) {
+      clearTimeout(preloadTimerRef.current);
     }
+    
+    const loadHoveredAndPreload = async () => {
+      // 1. Load hovered frame immediately (high priority)
+      const hoveredUrl = await thumbnailCache.current.get(hoveredFrame.id);
+      if (hoveredUrl) {
+        setThumbnailUrls(prev => new Map(prev.set(hoveredFrame.id, hoveredUrl)));
+      }
+      
+      // 2. Preload nearby frames (debounced to avoid excessive loading)
+      preloadTimerRef.current = setTimeout(async () => {
+        const currentIndex = frames.findIndex(f => f.id === hoveredFrame.id);
+        if (currentIndex === -1) return;
+        
+        // Preload ±15 frames around hovered frame
+        const preloadRange = 15;
+        const start = Math.max(0, currentIndex - preloadRange);
+        const end = Math.min(frames.length, currentIndex + preloadRange + 1);
+        
+        const nearbyFrameIds = frames
+          .slice(start, end)
+          .map(f => f.id);
+        
+        // Non-blocking preload in background
+        thumbnailCache.current.preload(nearbyFrameIds).catch(() => {
+          // Silently ignore preload errors
+        });
+      }, 150); // 150ms debounce
+    };
+    
+    loadHoveredAndPreload();
+    
+    return () => {
+      if (preloadTimerRef.current) {
+        clearTimeout(preloadTimerRef.current);
+      }
+    };
+  }, [hoveredFrame, frames]);
 
-    loadHoveredThumbnail();
-  }, [hoveredFrame, thumbnailUrls, frames]);
-
-  // Get thumbnail URL for a frame
+  // Get thumbnail URL for a frame from state
   const getThumbnailUrl = useCallback((frameId: string) => {
     return thumbnailUrls.get(frameId);
   }, [thumbnailUrls]);
@@ -166,16 +162,17 @@ export function FrameAnalysis({
   // Render frame thumbnail component
   const FrameThumbnail = useCallback(({ frame }: { frame: FrameData }) => {
     const url = getThumbnailUrl(frame.id);
-    if (!url) return null;
+    
+    if (!url) {
+      return null;
+    }
 
     return (
       <div className="relative w-full h-full">
-        <Image
+        <img
           src={url}
           alt={`Frame ${frame.id}`}
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 16vw"
+          className="w-full h-full object-cover"
           loading="lazy"
         />
       </div>
