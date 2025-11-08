@@ -456,14 +456,9 @@ export function useFrameExtraction() {
   const handleImageDirectoryChange = useCallback(
     async (files: FileList) => {
       console.log('Starting image directory processing...', { fileCount: files.length });
-      
-      updateState(prev => ({
-        ...prev,
-        loadingMetadata: true,
-        error: null,
-        frames: [],
-        isImageMode: true,
-      }));
+
+      const perfMemory = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+      console.log('[IMAGE_DIR] Starting - Memory:', perfMemory ? `${(perfMemory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
 
       try {
         // Filter for image files only
@@ -472,7 +467,7 @@ export function useFrameExtraction() {
           return ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(extension);
         });
 
-        console.log('Filtered image files:', { 
+        console.log('Filtered image files:', {
           totalFiles: files.length,
           imageFiles: imageFiles.length,
           firstFewNames: imageFiles.slice(0, 3).map(f => f.name)
@@ -486,32 +481,44 @@ export function useFrameExtraction() {
         imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
         console.log('Sorted image files, beginning batch processing...');
 
-        // Clear existing frames from storage
+        // Clear existing frames from storage BEFORE updating state (consistent with video mode)
+        console.log('[IMAGE_DIR] Clearing IndexedDB storage...');
         await frameStorage.clear();
+        const perfMemory2 = (performance as { memory?: { usedJSHeapSize: number } }).memory;
+        console.log('[IMAGE_DIR] IndexedDB cleared - Memory:', perfMemory2 ? `${(perfMemory2.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
+
+        // Update state after clearing storage
+        updateState(prev => ({
+          ...prev,
+          loadingMetadata: true,
+          error: null,
+          frames: [],
+          isImageMode: true,
+        }));
 
         const frameMetadata: FrameMetadata[] = [];
-        const BATCH_SIZE = 10; // Process 10 images at a time to manage memory
-        
+        const BATCH_SIZE = 20; // Process 20 images at a time for better batching efficiency
+
         for (let i = 0; i < imageFiles.length; i += BATCH_SIZE) {
           console.log(`Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(imageFiles.length/BATCH_SIZE)}...`);
-          
+
           try {
             const batch = imageFiles.slice(i, i + BATCH_SIZE);
-            console.log('Current batch:', { 
+            console.log('Current batch:', {
               batchNumber: Math.floor(i/BATCH_SIZE) + 1,
               batchSize: batch.length,
               fileNames: batch.map(f => f.name)
             });
 
-            // Process each image in the batch
-            await Promise.all(
+            // Process each image in the batch to calculate sharpness
+            const batchMetadata = await Promise.all(
               batch.map(async (file, batchIndex) => {
                 try {
                   // Create frame ID that preserves the original order
                   const globalIndex = i + batchIndex;
                   const frameId = `frame-${globalIndex.toString().padStart(5, '0')}`;
                   console.log(`Processing file ${file.name}...`);
-                  
+
                   // Calculate sharpness score first (requires less memory)
                   const sharpnessScore = await calculateSharpnessScore(file);
                   console.log(`Calculated sharpness score for ${file.name}: ${sharpnessScore}`);
@@ -525,30 +532,30 @@ export function useFrameExtraction() {
                     sharpnessScore,
                     selected: false,
                   };
-                  
-                  // Store metadata in memory for UI
-                  frameMetadata.push(metadata);
 
-                  // Store frame data in IndexedDB without redundant buffer conversion
-                  await frameStorage.storeFrame({
-                    ...metadata,
-                    blob: file,
-                    data: new Uint8Array(0), // Empty array - data generated on demand
-                    storedAt: Date.now(),
-                  });
-
-                  console.log(`Stored frame ${file.name} in IndexedDB`);
+                  return metadata;
                 } catch (error) {
                   console.error(`Error processing file ${file.name}:`, error);
                   throw error;
                 }
               })
             );
-            
-            // Update progress
+
+            // Store all frames in batch using IndexedDB transaction (non-blocking thumbnail generation)
+            const batchFrameData = batchMetadata.map((metadata, index) => ({
+              ...metadata,
+              blob: batch[index],
+              data: new Uint8Array(0), // Empty array - data generated on demand
+              storedAt: Date.now(),
+            }));
+
+            await frameStorage.storeFrameBatch(batchFrameData);
+            frameMetadata.push(...batchMetadata);
+            console.log(`Batch storage complete, ${batchMetadata.length} frames stored`);
+
+            // Update progress only (don't update frames yet to defer chart rendering)
             updateState(prev => ({
               ...prev,
-              frames: frameMetadata.sort((a, b) => a.timestamp - b.timestamp), // Sort by timestamp to maintain order
               extractionProgress: {
                 current: Math.min(i + BATCH_SIZE, imageFiles.length),
                 total: imageFiles.length,
@@ -574,23 +581,24 @@ export function useFrameExtraction() {
           }
         }
 
-        console.log('Finished processing all images:', { 
+        console.log('Finished processing all images:', {
           totalProcessed: frameMetadata.length
         });
 
+        // Update state with all frames at once after processing completes
         updateState(prev => ({
           ...prev,
-          frames: frameMetadata.sort((a, b) => a.timestamp - b.timestamp), // Final sort by timestamp
+          frames: frameMetadata.sort((a, b) => a.timestamp - b.timestamp), // Sort by timestamp to maintain order
           loadingMetadata: false,
           extractionProgress: { current: 0, total: 0 },
         }));
       } catch (error) {
-        console.error('Image processing error:', { 
+        console.error('Image processing error:', {
           error,
           message: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined
         });
-        
+
         updateState(prev => ({
           ...prev,
           error: error instanceof Error ? error.message : 'Failed to process images: Unknown error',

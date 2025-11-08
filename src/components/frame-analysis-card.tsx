@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { FrameSelection } from '@/components/frame-selection';
 import { FrameAnalysis } from '@/components/frame-analysis';
 import { type FrameData } from '@/types/frame';
+import { useMemo } from 'react';
 
 interface FrameAnalysisCardProps {
   frames: FrameData[];
@@ -43,6 +44,21 @@ export function FrameAnalysisCard({
   onToggleFramesAction,
   onToggleFrameSelectionAction
 }: FrameAnalysisCardProps) {
+  // Memoize the selected frames Set to prevent unnecessary re-renders of FrameAnalysis
+  // The selectedFrames array is new on each parent render, so we create a dependency key
+  // that captures when the actual frame IDs have changed
+  const selectedFrameIds = useMemo(() => {
+    return selectedFrames.map(f => f.id).sort().join(',');
+  }, [selectedFrames]);
+
+  const selectedFramesSet = useMemo(() => {
+    const frameIds = selectedFrames.map(f => f.id);
+    const set = new Set(frameIds);
+    console.log('[FRAME_ANALYSIS_CARD] Creating memoized selectedFramesSet with', selectedFrames.length, 'frames, IDs:', frameIds.join(','));
+    return set;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFrameIds]);
+
   if (frames.length === 0) return null;
 
   return (
@@ -81,7 +97,7 @@ export function FrameAnalysisCard({
             <Card className="p-6">
               <FrameAnalysis
                 frames={frames}
-                selectedFrames={new Set(selectedFrames.map(f => f.id))}
+                selectedFrames={selectedFramesSet}
                 onFrameSelectAction={(frameId) => onToggleFrameSelectionAction(frameId)}
                 showImageGrid={showFrames}
               />

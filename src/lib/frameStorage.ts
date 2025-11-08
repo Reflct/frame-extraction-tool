@@ -226,8 +226,25 @@ class FrameStorage {
 
   async getFrameBlob(id: string): Promise<Blob | undefined> {
     if (!this.db) await this.init();
-    const frame = await this.db!.get(this.frameStore, id);
-    return frame?.blob;
+    try {
+      const frame = await this.db!.get(this.frameStore, id);
+
+      // Validate blob exists and is valid
+      if (!frame) {
+        console.warn(`[FrameStorage] Frame not found: ${id}`);
+        return undefined;
+      }
+
+      if (!frame.blob || !(frame.blob instanceof Blob)) {
+        console.warn(`[FrameStorage] Invalid blob for frame ${id}`);
+        return undefined;
+      }
+
+      return frame.blob;
+    } catch (error) {
+      console.error(`[FrameStorage] Error retrieving frame blob ${id}:`, error);
+      return undefined;
+    }
   }
 
   async getFrameData(id: string): Promise<Uint8Array | undefined> {
