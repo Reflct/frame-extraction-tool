@@ -37,7 +37,7 @@ export function Description() {
           </li>
         </ul>
         <p className="text-[#4B5563] mt-4 leading-relaxed">
-          To avoid these restrictions, try <a href="https://github.com/yourusername/sharpframes-python" target="_blank" rel="noopener noreferrer" className="text-blue-600 font-medium hover:underline">SharpFrames Python</a> or join our <a href="https://discord.gg/rfYNxSw3yx" target="_blank" rel="noopener noreferrer" className="text-blue-600 font-medium hover:underline">Discord</a> for access to the Windows app (beta).
+          Use Chrome for best results. To avoid these restrictions, try <a href="https://github.com/Reflct/sharp-frames-python" target="_blank" rel="noopener noreferrer" className="text-blue-600 font-medium hover:underline">SharpFrames Python</a> or join our <a href="https://discord.gg/rfYNxSw3yx" target="_blank" rel="noopener noreferrer" className="text-blue-600 font-medium hover:underline">Discord</a> for access to the Windows app (beta).
         </p>
       </div>
     </div>

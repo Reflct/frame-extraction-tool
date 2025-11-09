@@ -64,13 +64,22 @@ export function useFrameExtraction() {
     try {
       updateState(prev => ({ ...prev, loadingMetadata: true }));
 
+      // Get metadata using FFmpeg first (this will work even if browser can't decode)
+      const metadata = await getVideoMetadata(file);
+
+      // Check codec compatibility with current browser BEFORE trying to load in video element
+      const codecIssue = checkCodecBrowserCompatibility(metadata.codec);
+      if (codecIssue) {
+        throw new Error(codecIssue);
+      }
+
       // Create video URL for both thumbnail and video element
       const videoUrl = URL.createObjectURL(file);
 
       // Create a temporary video element to extract the first frame
       const video = document.createElement('video');
       video.src = videoUrl;
-      
+
       // Wait for video metadata to load
       await new Promise((resolve, reject) => {
         video.onloadedmetadata = resolve;
@@ -92,24 +101,52 @@ export function useFrameExtraction() {
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Get metadata using FFmpeg
-      const metadata = await getVideoMetadata(file);
-      
       updateState(prev => ({
         ...prev,
         videoMetadata: metadata,
-        videoThumbnailUrl: videoUrl, 
+        videoThumbnailUrl: videoUrl,
         loadingMetadata: false,
-        fps: 10, 
-        timeRange: [0, metadata.duration], 
+        fps: 10,
+        timeRange: [0, metadata.duration],
       }));
 
       // Cleanup temporary elements
       video.remove();
     } catch (error) {
+      let errorMessage = 'Failed to load video metadata';
+
+      if (error instanceof Error) {
+        errorMessage = error.message;
+
+        // Handle specific DOMException names
+        if (error instanceof DOMException) {
+          switch (error.name) {
+            case 'AbortError':
+              errorMessage = 'Video loading was cancelled';
+              break;
+            case 'NotSupportedError':
+              errorMessage = 'Video codec not supported. Try a different video format (H264, HEVC, VP8, VP9, AV1)';
+              break;
+            case 'QuotaExceededError':
+              errorMessage = 'Video file is too large. Maximum size is ~1.9GB, but varies based on your browser memory. Try a smaller file or use Chrome for better performance.';
+              break;
+          }
+        }
+      }
+
+      // Check if it's a file size issue based on common patterns
+      if (errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('memory')) {
+        errorMessage = 'Video file is too large. Maximum size is ~1.9GB, but varies based on your browser memory. Try a smaller file or use Chrome for better performance.';
+      }
+
+      // Detect Firefox-specific codec issues
+      if (errorMessage.toLowerCase().includes('could not be decoded') || errorMessage.toLowerCase().includes('ns_error_dom_media')) {
+        errorMessage = 'Your browser cannot decode this video format. This is often a Firefox limitation with certain codecs. Try using Chrome, or convert your video to H264 format for better compatibility.';
+      }
+
       updateState(prev => ({
         ...prev,
-        error: `Failed to load video metadata: ${error}`,
+        error: errorMessage,
         loadingMetadata: false,
       }));
     }
@@ -621,4 +658,44 @@ export function useFrameExtraction() {
       handleBatchBufferChange,
     },
   };
+}
+
+function checkCodecBrowserCompatibility(codec: string): string | null {
+  const codecLower = codec.toLowerCase();
+
+  // Get browser information
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const isFirefox = userAgent.includes('Firefox');
+  const isChrome = userAgent.includes('Chrome') && !userAgent.includes('Edg');
+  const isSafari = userAgent.includes('Safari') && !userAgent.includes('Chrome');
+
+  // Check for HEVC/H.265
+  if (codecLower.includes('hevc') || codecLower.includes('h.265') || codecLower.includes('h265')) {
+    if (isFirefox) {
+      return 'Firefox does not support H.265/HEVC codec. Please use Chrome or convert your video to H.264 format.';
+    }
+    if (isChrome) {
+      return 'Chrome has limited H.265/HEVC support on some systems. If this fails, please convert your video to H.264 format or use Safari.';
+    }
+  }
+
+  // Check for AV1
+  if (codecLower.includes('av1')) {
+    if (isFirefox) {
+      const match = userAgent.match(/Firefox\/(\d+)/);
+      const version = parseInt(match?.[1] || '0');
+      if (version < 133) {
+        return 'Your Firefox version does not support AV1 codec (requires Firefox 133+). Please update your browser or convert the video to H.264.';
+      }
+    }
+  }
+
+  // Check for VP9
+  if (codecLower.includes('vp9')) {
+    if (isSafari) {
+      return 'Safari does not support VP9 codec. Please use Chrome/Firefox or convert your video to H.264 format.';
+    }
+  }
+
+  return null;
 }

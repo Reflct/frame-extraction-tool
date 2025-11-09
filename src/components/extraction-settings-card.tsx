@@ -66,7 +66,7 @@ export function ExtractionSettingsCard({
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Extraction Settings</h2>
         </div>
-        <div className="max-w-lg">
+        <div className="w-full">
           <div className="space-y-4 mb-6">
             <ExtractionMethodIndicator 
               currentMethod={extractionMethod}
