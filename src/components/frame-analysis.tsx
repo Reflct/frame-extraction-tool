@@ -41,13 +41,11 @@ export function FrameAnalysis({
 
   // Component lifecycle - cleanup cache on unmount and setup eviction callback
   useEffect(() => {
-    console.log('[FRAME_ANALYSIS] Component mounted');
     const cache = thumbnailCache.current;
     const failed = failedFrameIds.current;
 
     // Register callback to clean up state when cache evicts entries
     cache.setEvictionCallback((evictedFrameIds) => {
-      console.log('[FRAME_ANALYSIS] Cache evicted frames, cleaning up state:', evictedFrameIds);
       setThumbnailUrls(prev => {
         const updated = new Map(prev);
         evictedFrameIds.forEach(id => updated.delete(id));
@@ -56,8 +54,6 @@ export function FrameAnalysis({
     });
 
     return () => {
-      const stats = cache.getStats();
-      console.log('[FRAME_ANALYSIS] Component unmounting, cache stats:', stats);
       cache.clear();
       failed.clear();
       setThumbnailUrls(new Map());
@@ -85,7 +81,6 @@ export function FrameAnalysis({
 
       // Skip if frame generation permanently failed
       if (failedFrameIds.current.has(hoveredId)) {
-        console.log('[FRAME_ANALYSIS] Hovered frame generation failed previously:', hoveredId);
         return;
       }
 
@@ -94,10 +89,8 @@ export function FrameAnalysis({
       if (hoveredUrl) {
         // Always update state immediately for hovered frames (don't throttle)
         setThumbnailUrls(prev => new Map(prev.set(hoveredId, hoveredUrl)));
-        console.log('[FRAME_ANALYSIS] Loaded hovered frame:', hoveredId);
       } else {
         // Only mark as failed if generation actually failed (not just queue full)
-        console.log('[FRAME_ANALYSIS] Failed to load hovered frame:', hoveredId);
         // Don't mark as failed yet - could be queue full, will retry next hover
       }
 
@@ -117,8 +110,6 @@ export function FrameAnalysis({
           .filter(id => !failedFrameIds.current.has(id)); // Skip frames that permanently failed
 
         if (nearbyFrameIds.length > 0) {
-          console.log('[FRAME_ANALYSIS] Preloading', nearbyFrameIds.length, 'nearby frames');
-
           // Non-blocking preload in background (no attempt tracking, let cache handle retries)
           thumbnailCache.current.preload(nearbyFrameIds).catch(() => {
             // Silently ignore preload errors
@@ -146,16 +137,7 @@ export function FrameAnalysis({
 
   // Monitor thumbnail URL map growth and cache health
   useEffect(() => {
-    if (thumbnailUrls.size > 0 || failedFrameIds.current.size > 0) {
-      const cacheStats = thumbnailCache.current.getStats();
-      console.log('[FRAME_ANALYSIS] Thumbnail stats:', {
-        mapSize: thumbnailUrls.size,
-        failedCount: failedFrameIds.current.size,
-        cacheSize: cacheStats.size,
-        cacheLoading: cacheStats.loading,
-        cacheUtilization: cacheStats.utilizationPercent + '%'
-      });
-    }
+    // Cache health monitoring (non-invasive)
   }, [thumbnailUrls.size]);
 
   // Render frame thumbnail component
@@ -270,7 +252,6 @@ export function FrameAnalysis({
       if (canvasContainerRef.current) {
         const width = canvasContainerRef.current.offsetWidth;
         setContainerWidth(width);
-        console.log('[FrameAnalysis] Container width updated:', width);
       }
     };
 
@@ -422,8 +403,10 @@ export function FrameAnalysis({
                   const bucketSize = Math.ceil(frames.length / MAX_DATA_POINTS);
                   const aggregatedData: number[] = [];
 
-                  // Calculate max sharpness once
-                  const maxSharpness = Math.max(...frames.map(f => f.sharpnessScore || 0), 100);
+                  // Calculate max sharpness from actual frame data
+                  // This adapts to different video content ranges dynamically
+                  const sharpnessValues = frames.map(f => f.sharpnessScore || 0);
+                  const maxSharpness = Math.max(...sharpnessValues, 1); // Ensure at least 1 to prevent division by zero
 
                   // Aggregate frames into buckets - use average of sharpness in each bucket
                   for (let i = 0; i < frames.length; i += bucketSize) {

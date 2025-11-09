@@ -38,18 +38,13 @@ export function useFrameExtraction() {
   const handleVideoChange = useCallback(async (file: File) => {
     if (!file) return;
 
-    const perfMemory = (performance as { memory?: { usedJSHeapSize: number } }).memory;
-    console.log('[VIDEO_CHANGE] Starting - Memory:', perfMemory ? `${(perfMemory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
-
     // Clean up previous video URL if it exists
     if (state.videoThumbnailUrl) {
       URL.revokeObjectURL(state.videoThumbnailUrl);
     }
 
     // Clear IndexedDB storage to prevent memory issues across sessions
-    console.log('[VIDEO_CHANGE] Clearing IndexedDB storage...');
     await frameStorage.clear();
-    console.log('[VIDEO_CHANGE] IndexedDB cleared');
 
     // Reset extraction method and performance metrics for new video
     setExtractionMethod(null);
@@ -112,7 +107,6 @@ export function useFrameExtraction() {
       // Cleanup temporary elements
       video.remove();
     } catch (error) {
-      console.error('Video load error:', error);
       updateState(prev => ({
         ...prev,
         error: `Failed to load video metadata: ${error}`,
@@ -122,17 +116,12 @@ export function useFrameExtraction() {
   }, [state.videoThumbnailUrl, updateState]);
 
   const handleVideoReplace = useCallback(async () => {
-    const perfMemory = (performance as { memory?: { usedJSHeapSize: number } }).memory;
-    console.log('[VIDEO_REPLACE] Starting - Memory:', perfMemory ? `${(perfMemory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
-    
     if (state.videoThumbnailUrl) {
       URL.revokeObjectURL(state.videoThumbnailUrl);
     }
-    
+
     // Clear IndexedDB storage to prevent memory issues across sessions
-    console.log('[VIDEO_REPLACE] Clearing IndexedDB storage...');
     await frameStorage.clear();
-    console.log('[VIDEO_REPLACE] IndexedDB cleared');
     
     // Reset extraction method and performance metrics when replacing video
     setExtractionMethod(null);
@@ -163,9 +152,6 @@ export function useFrameExtraction() {
   }, [updateState]);
 
   const handleExtractFrames = useCallback(async () => {
-    const perfMemory = (performance as { memory?: { usedJSHeapSize: number } }).memory;
-    console.log('[EXTRACTION] Starting - Memory:', perfMemory ? `${(perfMemory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
-    
     if (!state.videoFile || !state.videoMetadata) {
       updateState(prev => ({
         ...prev,
@@ -183,10 +169,7 @@ export function useFrameExtraction() {
     }
 
     // Clear IndexedDB storage before starting new extraction to prevent memory issues
-    console.log('[EXTRACTION] Clearing IndexedDB storage before extraction...');
     await frameStorage.clear();
-    const perfMemory2 = (performance as { memory?: { usedJSHeapSize: number } }).memory;
-    console.log('[EXTRACTION] IndexedDB cleared - Memory:', perfMemory2 ? `${(perfMemory2.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
 
     // Reset extraction method and performance metrics before starting new extraction
     setExtractionMethod(null);
@@ -245,9 +228,6 @@ export function useFrameExtraction() {
 
       const { frames: extractedFrames, method, performance, fallbackReason: reason } = result;
 
-      const perfMemory3 = (performance as { memory?: { usedJSHeapSize: number } }).memory;
-      console.log('[EXTRACTION] Frames extracted:', extractedFrames.length, '- Memory:', perfMemory3 ? `${(perfMemory3.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
-      
       // Store method and performance metrics
       setExtractionMethod(method);
       setFallbackReason(reason || null);
@@ -263,9 +243,7 @@ export function useFrameExtraction() {
       // Create FrameData objects with sharpness scores (parallel processing)
       const totalFrames = extractedFrames.length;
       const SHARPNESS_BATCH_SIZE = 10; // Process 10 frames at a time for sharpness
-      
-      console.log('[EXTRACTION] Starting sharpness calculation for', totalFrames, 'frames');
-      
+
       // Update state to show sharpness calculation progress
       updateState(prev => ({
         ...prev,
@@ -325,10 +303,6 @@ export function useFrameExtraction() {
         }
       }
 
-      const perfMemory4 = (performance as { memory?: { usedJSHeapSize: number } }).memory;
-      console.log('[EXTRACTION] Sharpness calculation complete - Memory:', perfMemory4 ? `${(perfMemory4.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
-      console.log('[EXTRACTION] Updating state with', frames.length, 'frames (metadata only, no blobs)');
-      
       // Update state with processed frames
       updateState(prev => ({
         ...prev,
@@ -338,11 +312,7 @@ export function useFrameExtraction() {
         sharpnessProgress: { current: 0, total: 0 } // Clear sharpness progress
       }));
       
-      const perfMemory5 = (performance as { memory?: { usedJSHeapSize: number } }).memory;
-      console.log('[EXTRACTION] Complete - Memory:', perfMemory5 ? `${(perfMemory5.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
-      console.log('[EXTRACTION] State updated, extraction finished');
     } catch (error) {
-      console.error('Error in frame extraction:', error);
       
       // Only set error if not aborted
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -396,7 +366,6 @@ export function useFrameExtraction() {
     const selectedFrames = getSelectedFrames(state);
 
     if (selectedFrames.length === 0) {
-      console.error('No frames selected for download');
       return;
     }
 
@@ -421,8 +390,7 @@ export function useFrameExtraction() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Error downloading frames:', error);
+    } catch {
       updateState(prev => ({
         ...prev,
         error: 'Failed to download frames'
@@ -455,22 +423,11 @@ export function useFrameExtraction() {
 
   const handleImageDirectoryChange = useCallback(
     async (files: FileList) => {
-      console.log('Starting image directory processing...', { fileCount: files.length });
-
-      const perfMemory = (performance as { memory?: { usedJSHeapSize: number } }).memory;
-      console.log('[IMAGE_DIR] Starting - Memory:', perfMemory ? `${(perfMemory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
-
       try {
         // Filter for image files only
         const imageFiles = Array.from(files).filter(file => {
           const extension = file.name.split('.').pop()?.toLowerCase() || '';
           return ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(extension);
-        });
-
-        console.log('Filtered image files:', {
-          totalFiles: files.length,
-          imageFiles: imageFiles.length,
-          firstFewNames: imageFiles.slice(0, 3).map(f => f.name)
         });
 
         if (imageFiles.length === 0) {
@@ -479,13 +436,9 @@ export function useFrameExtraction() {
 
         // Sort image files alphabetically by name
         imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-        console.log('Sorted image files, beginning batch processing...');
 
         // Clear existing frames from storage BEFORE updating state (consistent with video mode)
-        console.log('[IMAGE_DIR] Clearing IndexedDB storage...');
         await frameStorage.clear();
-        const perfMemory2 = (performance as { memory?: { usedJSHeapSize: number } }).memory;
-        console.log('[IMAGE_DIR] IndexedDB cleared - Memory:', perfMemory2 ? `${(perfMemory2.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB` : 'N/A');
 
         // Update state after clearing storage
         updateState(prev => ({
@@ -500,15 +453,8 @@ export function useFrameExtraction() {
         const BATCH_SIZE = 20; // Process 20 images at a time for better batching efficiency
 
         for (let i = 0; i < imageFiles.length; i += BATCH_SIZE) {
-          console.log(`Processing batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(imageFiles.length/BATCH_SIZE)}...`);
-
           try {
             const batch = imageFiles.slice(i, i + BATCH_SIZE);
-            console.log('Current batch:', {
-              batchNumber: Math.floor(i/BATCH_SIZE) + 1,
-              batchSize: batch.length,
-              fileNames: batch.map(f => f.name)
-            });
 
             // Process each image in the batch to calculate sharpness
             const batchMetadata = await Promise.all(
@@ -517,11 +463,9 @@ export function useFrameExtraction() {
                   // Create frame ID that preserves the original order
                   const globalIndex = i + batchIndex;
                   const frameId = `frame-${globalIndex.toString().padStart(5, '0')}`;
-                  console.log(`Processing file ${file.name}...`);
 
                   // Calculate sharpness score first (requires less memory)
                   const sharpnessScore = await calculateSharpnessScore(file);
-                  console.log(`Calculated sharpness score for ${file.name}: ${sharpnessScore}`);
 
                   // Create metadata
                   const metadata: FrameMetadata = {
@@ -535,7 +479,6 @@ export function useFrameExtraction() {
 
                   return metadata;
                 } catch (error) {
-                  console.error(`Error processing file ${file.name}:`, error);
                   throw error;
                 }
               })
@@ -551,7 +494,6 @@ export function useFrameExtraction() {
 
             await frameStorage.storeFrameBatch(batchFrameData);
             frameMetadata.push(...batchMetadata);
-            console.log(`Batch storage complete, ${batchMetadata.length} frames stored`);
 
             // Update progress only (don't update frames yet to defer chart rendering)
             updateState(prev => ({
@@ -563,27 +505,12 @@ export function useFrameExtraction() {
               }
             }));
           } catch (error) {
-            const batch = imageFiles.slice(i, i + BATCH_SIZE);
-            console.error('Error processing batch:', {
-              error,
-              message: error instanceof Error ? error.message : 'Unknown error',
-              stack: error instanceof Error ? error.stack : undefined,
-              batchInfo: {
-                currentBatch: Math.floor(i/BATCH_SIZE) + 1,
-                totalBatches: Math.ceil(imageFiles.length/BATCH_SIZE),
-                fileNames: batch.map((f: File) => f.name)
-              }
-            });
             if (error instanceof Error && error.message.includes('memory')) {
               throw new Error(`Browser memory limit reached after processing ${frameMetadata.length} images. Please reduce the number of images or their size.`);
             }
             throw error;
           }
         }
-
-        console.log('Finished processing all images:', {
-          totalProcessed: frameMetadata.length
-        });
 
         // Update state with all frames at once after processing completes
         updateState(prev => ({
@@ -593,12 +520,6 @@ export function useFrameExtraction() {
           extractionProgress: { current: 0, total: 0 },
         }));
       } catch (error) {
-        console.error('Image processing error:', {
-          error,
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined
-        });
-
         updateState(prev => ({
           ...prev,
           error: error instanceof Error ? error.message : 'Failed to process images: Unknown error',

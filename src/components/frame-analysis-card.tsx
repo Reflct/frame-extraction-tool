@@ -54,7 +54,6 @@ export function FrameAnalysisCard({
   const selectedFramesSet = useMemo(() => {
     const frameIds = selectedFrames.map(f => f.id);
     const set = new Set(frameIds);
-    console.log('[FRAME_ANALYSIS_CARD] Creating memoized selectedFramesSet with', selectedFrames.length, 'frames, IDs:', frameIds.join(','));
     return set;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFrameIds]);

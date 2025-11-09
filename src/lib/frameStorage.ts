@@ -231,18 +231,15 @@ class FrameStorage {
 
       // Validate blob exists and is valid
       if (!frame) {
-        console.warn(`[FrameStorage] Frame not found: ${id}`);
         return undefined;
       }
 
       if (!frame.blob || !(frame.blob instanceof Blob)) {
-        console.warn(`[FrameStorage] Invalid blob for frame ${id}`);
         return undefined;
       }
 
       return frame.blob;
     } catch (error) {
-      console.error(`[FrameStorage] Error retrieving frame blob ${id}:`, error);
       return undefined;
     }
   }

@@ -2,7 +2,10 @@ export async function createThumbnail(blob: Blob, maxWidth: number = 150): Promi
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(blob);
-    let loadTimeout: ReturnType<typeof setTimeout>;
+    const loadTimeout = setTimeout(() => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Image load timeout'));
+    }, 10000);
 
     img.onload = () => {
       clearTimeout(loadTimeout);
@@ -46,12 +49,10 @@ export async function createThumbnail(blob: Blob, maxWidth: number = 150): Promi
 
           // Validate blob has actual data
           if (blob.size === 0) {
-            console.warn('[createThumbnail] Canvas blob created but is empty (size: 0)');
             reject(new Error('Thumbnail blob is empty'));
             return;
           }
 
-          console.log(`[createThumbnail] Successfully created thumbnail blob: ${blob.size} bytes`);
           resolve(blob);
         },
         'image/jpeg',
@@ -62,16 +63,8 @@ export async function createThumbnail(blob: Blob, maxWidth: number = 150): Promi
     img.onerror = () => {
       clearTimeout(loadTimeout);
       URL.revokeObjectURL(url);
-      console.error('[createThumbnail] Failed to load image for thumbnail creation');
       reject(new Error('Failed to load image for thumbnail creation'));
     };
-
-    // Add timeout to catch stalled image loads
-    loadTimeout = setTimeout(() => {
-      URL.revokeObjectURL(url);
-      console.error('[createThumbnail] Image load timeout');
-      reject(new Error('Image load timeout'));
-    }, 10000);
 
     img.src = url;
   });

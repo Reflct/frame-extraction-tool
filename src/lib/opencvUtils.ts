@@ -132,10 +132,10 @@ export async function calculateSharpnessScore(imageBlob: Blob): Promise<number> 
     }
     const mad = sumAbsDev / laplacianData.length;
 
-    // Scale to 0-100 range and ensure it's a reasonable value
-    const scaledScore = Math.min(100, Math.max(0, mad * 5));
-
-    return scaledScore;
+    // Return raw MAD value - preserves all variance information
+    // Typical range: 0-20+ depending on image content
+    // Chart will normalize to actual data range for visualization
+    return mad;
   } catch (error) {
     throw new Error(`Failed to calculate sharpness score: ${error}`);
   } finally {

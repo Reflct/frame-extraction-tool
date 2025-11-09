@@ -21,49 +21,39 @@ export function ChartTooltip({ frame, position, getThumbnailUrl }: ChartTooltipP
       const x = position.x;
       const y = position.y - 16;
 
-      console.log('[TOOLTIP_POSITION] Setting position:', { x, y, frameId: frame?.id });
-
       // Use transform3d for GPU acceleration
       tooltip.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-    } catch (error) {
-      console.error('[TOOLTIP_POSITION] Error setting position:', error);
+    } catch {
+      // Silently handle positioning errors
     }
   }, [position, frame?.id]);
 
   // Track loading state for thumbnail
   useEffect(() => {
     try {
-      console.log('[TOOLTIP_THUMB] Effect fired - Frame:', frame?.id, 'getThumbnailUrl function changed');
-
       if (frame && !getThumbnailUrl(frame.id)) {
-        console.log('[TOOLTIP_THUMB] Thumbnail not cached, setting loading state for:', frame.id);
         setIsLoading(true);
         setLoadError(false);
         // Set a timeout to show loading state if thumbnail takes too long
         const timer = setTimeout(() => {
-          console.log('[TOOLTIP_THUMB] Timeout loading thumbnail for:', frame.id);
           setIsLoading(false);
         }, 1000);
         return () => clearTimeout(timer);
       } else {
-        console.log('[TOOLTIP_THUMB] Thumbnail found or no frame');
         setIsLoading(false);
         setLoadError(false);
       }
-    } catch (error) {
-      console.error('[TOOLTIP_THUMB] Error in thumbnail loading effect:', error);
+    } catch {
       setIsLoading(false);
     }
   }, [frame, getThumbnailUrl]);
 
   if (!frame || !position) {
-    console.log('[TOOLTIP_RENDER] Not rendering - frame or position missing');
     return null;
   }
 
   try {
     const thumbnailUrl = getThumbnailUrl(frame.id);
-    console.log('[TOOLTIP_RENDER] Rendering tooltip for frame:', frame.id, 'has URL:', !!thumbnailUrl);
 
     return (
       <div
@@ -87,12 +77,10 @@ export function ChartTooltip({ frame, position, getThumbnailUrl }: ChartTooltipP
               alt={frame.name}
               className="w-full h-full object-cover"
               onLoad={() => {
-                console.log('[TOOLTIP_THUMB] Thumbnail loaded successfully for:', frame.id);
                 setIsLoading(false);
                 setLoadError(false);
               }}
               onError={() => {
-                console.error('[TOOLTIP_THUMB] Thumbnail load error for:', frame.id, 'URL:', thumbnailUrl);
                 setIsLoading(false);
                 setLoadError(true);
               }}
@@ -114,8 +102,7 @@ export function ChartTooltip({ frame, position, getThumbnailUrl }: ChartTooltipP
         </div>
       </div>
     );
-  } catch (error) {
-    console.error('[TOOLTIP_RENDER] Error rendering tooltip:', error);
+  } catch {
     return null;
   }
 }

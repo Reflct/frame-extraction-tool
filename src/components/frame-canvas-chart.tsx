@@ -62,16 +62,18 @@ const CanvasFrameChart: React.FC<CanvasFrameChartProps> = ({
   }, [scrollOffset, containerWidth, frames.length]);
 
   // Calculate max sharpness score for Y-axis scaling
-  // NOTE: Only depends on frames.length to avoid expensive recalculations when frame data changes
-  // The loop reads current frame values, but we only recalculate when count changes
+  // Uses actual max from frames to provide proper normalization
+  // With raw MAD values, this dynamically adapts to different video content
   const maxSharpnessScore = useMemo(() => {
-    let max = 100;
+    let max = 0;
     for (const frame of frames) {
       if (frame.sharpnessScore && frame.sharpnessScore > max) {
         max = frame.sharpnessScore;
       }
     }
-    return max;
+    // Ensure we have a reasonable minimum max to prevent division by zero
+    // and to provide a sensible baseline for the chart
+    return Math.max(max, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frames.length]);
 
@@ -193,16 +195,6 @@ const CanvasFrameChart: React.FC<CanvasFrameChartProps> = ({
     const canvasHeight = height;
     const chartHeight = canvasHeight - MARGIN_BOTTOM - MARGIN_TOP;
 
-    console.log('[Canvas Render] Canvas sizing:', {
-      containerWidth,
-      canvasWidth,
-      height,
-      canvasHeight,
-      scrollOffset,
-      visibleRange: visibleRange.endIndex - visibleRange.startIndex,
-      totalFrames: frames.length
-    });
-
     // Clear canvas
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
@@ -285,17 +277,6 @@ const CanvasFrameChart: React.FC<CanvasFrameChartProps> = ({
     ctx.moveTo(MARGIN_LEFT, MARGIN_TOP + chartHeight);
     ctx.lineTo(canvasWidth, MARGIN_TOP + chartHeight);
     ctx.stroke();
-
-    const renderTime = performance.now() - startTime;
-    console.log('[CanvasFrameChart] renderChart completed:', {
-      barsDrawn,
-      visibleRangeStart: visibleRange.startIndex,
-      visibleRangeEnd: visibleRange.endIndex,
-      totalFrames: frames.length,
-      scrollOffset,
-      containerWidth,
-      renderTimeMs: renderTime.toFixed(2)
-    });
 
     // Schedule next render if needed
     if (animationFrameRef.current) {
