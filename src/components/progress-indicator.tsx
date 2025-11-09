@@ -37,14 +37,14 @@ export function ProgressIndicator({
               </span>
             )}
           </div>
-          <span>
-            {extractionProgress.current}/{extractionProgress.total}
-            {extractionProgress.estimatedTimeMs && (
+          <code className="font-mono tabular-nums whitespace-nowrap bg-transparent">
+            {String(extractionProgress.current)}/{String(extractionProgress.total)}
+            {extractionProgress.estimatedTimeMs !== undefined && extractionProgress.estimatedTimeMs > 0 && (
               <span className="text-gray-500 ml-2">
                 ({formatTimeRemaining(extractionProgress.estimatedTimeMs)} remaining)
               </span>
             )}
-          </span>
+          </code>
         </div>
         <Progress value={(extractionProgress.current / extractionProgress.total) * 100} />
       </div>
@@ -52,14 +52,14 @@ export function ProgressIndicator({
       <div>
         <div className="flex justify-between text-sm mb-1">
           <span>Calculating Sharpness</span>
-          <span>
-            {sharpnessProgress.current}/{sharpnessProgress.total}
-            {sharpnessProgress.estimatedTimeMs && (
+          <code className="font-mono tabular-nums whitespace-nowrap bg-transparent">
+            {String(sharpnessProgress.current)}/{String(sharpnessProgress.total)}
+            {sharpnessProgress.estimatedTimeMs !== undefined && sharpnessProgress.estimatedTimeMs > 0 && (
               <span className="text-gray-500 ml-2">
                 ({formatTimeRemaining(sharpnessProgress.estimatedTimeMs)} remaining)
               </span>
             )}
-          </span>
+          </code>
         </div>
         <Progress value={(sharpnessProgress.current / sharpnessProgress.total) * 100} />
       </div>

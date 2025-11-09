@@ -321,15 +321,16 @@ export function useFrameExtraction() {
         batchPromises.length = 0;
         
         // Update progress after each batch
+        const currentFrames = Math.min(i + SHARPNESS_BATCH_SIZE, totalFrames);
         updateState(prev => ({
           ...prev,
           sharpnessProgress: {
-            current: Math.min(i + SHARPNESS_BATCH_SIZE, totalFrames),
+            current: currentFrames,
             total: totalFrames,
             startTime: prev.sharpnessProgress.startTime,
             estimatedTimeMs: prev.sharpnessProgress.startTime
-              ? ((Date.now() - prev.sharpnessProgress.startTime) / (i + SHARPNESS_BATCH_SIZE)) * 
-                  Math.ceil((totalFrames - i - SHARPNESS_BATCH_SIZE) / SHARPNESS_BATCH_SIZE)
+              ? ((Date.now() - prev.sharpnessProgress.startTime) / currentFrames) *
+                  (totalFrames - currentFrames)
               : undefined,
           }
         }));
