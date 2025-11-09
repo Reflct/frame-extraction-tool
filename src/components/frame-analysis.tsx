@@ -445,21 +445,45 @@ export function FrameAnalysis({
               </svg>
 
               {/* Viewport indicator - shows which part of chart is currently visible */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  bottom: 0,
-                  backgroundColor: 'rgba(59, 130, 246, 0.3)',
-                  borderLeft: '2px solid #3b82f6',
-                  borderRight: '2px solid #3b82f6',
-                  left: `${containerWidth > 0 ? (scrollPosition / ((frames.length * 10) - containerWidth)) * 100 : 0}%`,
-                  width: `${containerWidth > 0 ? (containerWidth / (frames.length * 10)) * 100 : 100}%`,
-                  minWidth: '40px',
-                  pointerEvents: 'none',
-                  transition: 'none'
-                }}
-              />
+              {(() => {
+                // Calculate visible frame indices (same logic as canvas chart)
+                const BAR_WIDTH = 10;
+
+                // Calculate which frames are visible
+                const startFrameIndex = containerWidth > 0 ? Math.max(0, Math.floor(scrollPosition / BAR_WIDTH)) : 0;
+                const endFrameIndex = containerWidth > 0 ? Math.min(frames.length, startFrameIndex + Math.ceil(containerWidth / BAR_WIDTH) + 1) : 0;
+
+                // Map frame indices to aggregated datapoint indices
+                const MAX_DATA_POINTS = 500;
+                const bucketSize = Math.ceil(frames.length / MAX_DATA_POINTS);
+
+                // Calculate which aggregated datapoints correspond to visible frames
+                const startAggregatedIndex = Math.floor(startFrameIndex / bucketSize);
+                const endAggregatedIndex = Math.ceil(endFrameIndex / bucketSize);
+                const totalAggregatedPoints = Math.ceil(frames.length / bucketSize);
+
+                // Convert aggregated datapoint indices to percentages
+                const leftPercent = (startAggregatedIndex / Math.max(totalAggregatedPoints, 1)) * 100;
+                const widthPercent = ((endAggregatedIndex - startAggregatedIndex) / Math.max(totalAggregatedPoints, 1)) * 100;
+
+                return (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      bottom: 0,
+                      backgroundColor: 'rgba(59, 130, 246, 0.3)',
+                      borderLeft: '2px solid #3b82f6',
+                      borderRight: '2px solid #3b82f6',
+                      left: `${leftPercent}%`,
+                      width: `${widthPercent}%`,
+                      minWidth: '40px',
+                      pointerEvents: 'none',
+                      transition: 'none'
+                    }}
+                  />
+                );
+              })()}
             </div>
           </div>
         )}
