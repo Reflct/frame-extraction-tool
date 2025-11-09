@@ -10,6 +10,7 @@ interface ChartTooltipProps {
 export function ChartTooltip({ frame, position, getThumbnailUrl }: ChartTooltipProps) {
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     try {
@@ -37,6 +38,7 @@ export function ChartTooltip({ frame, position, getThumbnailUrl }: ChartTooltipP
       if (frame && !getThumbnailUrl(frame.id)) {
         console.log('[TOOLTIP_THUMB] Thumbnail not cached, setting loading state for:', frame.id);
         setIsLoading(true);
+        setLoadError(false);
         // Set a timeout to show loading state if thumbnail takes too long
         const timer = setTimeout(() => {
           console.log('[TOOLTIP_THUMB] Timeout loading thumbnail for:', frame.id);
@@ -46,6 +48,7 @@ export function ChartTooltip({ frame, position, getThumbnailUrl }: ChartTooltipP
       } else {
         console.log('[TOOLTIP_THUMB] Thumbnail found or no frame');
         setIsLoading(false);
+        setLoadError(false);
       }
     } catch (error) {
       console.error('[TOOLTIP_THUMB] Error in thumbnail loading effect:', error);
@@ -83,7 +86,24 @@ export function ChartTooltip({ frame, position, getThumbnailUrl }: ChartTooltipP
               src={thumbnailUrl}
               alt={frame.name}
               className="w-full h-full object-cover"
+              onLoad={() => {
+                console.log('[TOOLTIP_THUMB] Thumbnail loaded successfully for:', frame.id);
+                setIsLoading(false);
+                setLoadError(false);
+              }}
+              onError={() => {
+                console.error('[TOOLTIP_THUMB] Thumbnail load error for:', frame.id, 'URL:', thumbnailUrl);
+                setIsLoading(false);
+                setLoadError(true);
+              }}
             />
+          )}
+          {loadError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-red-50">
+              <div className="text-center">
+                <p className="text-xs text-red-600">Failed to load thumbnail</p>
+              </div>
+            </div>
           )}
         </div>
         <div className="space-y-1">

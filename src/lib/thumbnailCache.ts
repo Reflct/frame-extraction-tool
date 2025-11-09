@@ -15,9 +15,19 @@ export class ThumbnailCache {
   private cache: Map<string, CacheEntry> = new Map();
   private maxSize: number;
   private loadingQueue: Set<string> = new Set();
-  
+  private deferredRequests: Map<string, { retries: number; timestamp: number }> = new Map();
+  private onEvict: ((frameIds: string[]) => void) | null = null;
+
   constructor(maxSize: number = 200) {
     this.maxSize = maxSize;
+  }
+
+  /**
+   * Register a callback to be notified when thumbnails are evicted
+   * This allows the component to clean up state when cache evicts entries
+   */
+  setEvictionCallback(callback: (frameIds: string[]) => void): void {
+    this.onEvict = callback;
   }
   
   /**
@@ -44,10 +54,32 @@ export class ThumbnailCache {
       return null;
     }
 
-    // Limit concurrent loads - if too many are loading, don't start a new one
+    // Limit concurrent loads - if too many are loading, defer this request
     // This prevents memory from exploding during rapid interactions
-    if (this.loadingQueue.size > 3) {
+    const CONCURRENT_LOAD_LIMIT = 10;
+    if (this.loadingQueue.size > CONCURRENT_LOAD_LIMIT) {
       console.log(`[ThumbnailCache.get] Too many concurrent loads (${this.loadingQueue.size}), deferring ${frameId}`);
+
+      // Track deferred request for retry
+      const deferred = this.deferredRequests.get(frameId);
+      const retryCount = deferred ? deferred.retries + 1 : 0;
+
+      // Implement exponential backoff retry: try again after 100ms, 200ms, 400ms
+      if (retryCount < 3) {
+        const delay = Math.pow(2, retryCount) * 100;
+        this.deferredRequests.set(frameId, { retries: retryCount, timestamp: Date.now() });
+
+        console.log(`[ThumbnailCache.get] Scheduling retry ${retryCount + 1}/3 for ${frameId} in ${delay}ms`);
+
+        // Schedule retry
+        setTimeout(() => {
+          this.deferredRequests.delete(frameId);
+          this.get(frameId, generateIfMissing).catch(() => {
+            // Silently ignore retry errors
+          });
+        }, delay);
+      }
+
       return null;
     }
 
@@ -98,8 +130,8 @@ export class ThumbnailCache {
       }
 
       // Validate blob before using it
-      if (!(blob instanceof Blob) || blob.size === 0) {
-        console.warn(`[ThumbnailCache] Invalid blob for ${frameId}: not a Blob or empty`);
+      if (!this.isValidBlob(blob)) {
+        console.warn(`[ThumbnailCache] Invalid blob for ${frameId}`);
         return null;
       }
 
@@ -206,8 +238,10 @@ export class ThumbnailCache {
    * Heavily rate-limited to prevent memory leaks from rapid image loading
    */
   async preload(frameIds: string[]): Promise<void> {
-    const BATCH_SIZE = 2; // Reduced from 5 to 2 to reduce concurrent loads
-    const BATCH_DELAY = 100; // Increased from 5ms to 100ms between batches
+    // Optimized for large datasets: increase batch size and reduce delay
+    // Allows faster preloading while still preventing memory spikes
+    const BATCH_SIZE = 5; // Increased from 2 for faster preloading with large datasets
+    const BATCH_DELAY = 50; // Reduced from 100ms for responsive UX (300ms total for 30 frames vs 1500ms)
 
     for (let i = 0; i < frameIds.length; i += BATCH_SIZE) {
       const batch = frameIds.slice(i, i + BATCH_SIZE);
@@ -237,23 +271,68 @@ export class ThumbnailCache {
    */
   private evictIfNeeded(): void {
     if (this.cache.size <= this.maxSize) return;
-    
+
     // Sort by last accessed time (oldest first)
     const entries = Array.from(this.cache.entries())
       .sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
-    
+
     // Evict oldest 20% of cache
     const evictCount = Math.ceil(this.maxSize * 0.2);
-    
+    const evictedFrameIds: string[] = [];
+
     for (let i = 0; i < evictCount && i < entries.length; i++) {
       const [frameId, entry] = entries[i];
       URL.revokeObjectURL(entry.url);
       this.cache.delete(frameId);
+      evictedFrameIds.push(frameId);
     }
-    
+
+    // Notify component to clean up state
+    if (this.onEvict && evictedFrameIds.length > 0) {
+      this.onEvict(evictedFrameIds);
+      console.log(`[ThumbnailCache] Notified component of ${evictedFrameIds.length} evicted thumbnails`);
+    }
+
     console.log(`[ThumbnailCache] Evicted ${evictCount} thumbnails (cache size: ${this.cache.size}/${this.maxSize})`);
   }
   
+  /**
+   * Validate that a blob is actually a valid image blob
+   */
+  private isValidBlob(blob: unknown): boolean {
+    // Check type
+    if (!(blob instanceof Blob)) {
+      console.warn('[ThumbnailCache] Blob validation failed: not a Blob instance');
+      return false;
+    }
+
+    // Check size
+    if (blob.size === 0) {
+      console.warn('[ThumbnailCache] Blob validation failed: blob is empty (size: 0)');
+      return false;
+    }
+
+    // Check type is image-related
+    if (!blob.type.startsWith('image/')) {
+      console.warn(`[ThumbnailCache] Blob validation failed: wrong type (${blob.type}), expected image/*`);
+      return false;
+    }
+
+    // Check size is reasonable (more than 100 bytes, less than 10MB)
+    if (blob.size < 100) {
+      console.warn(`[ThumbnailCache] Blob validation failed: suspiciously small (${blob.size} bytes)`);
+      return false;
+    }
+
+    if (blob.size > 10 * 1024 * 1024) {
+      console.warn(`[ThumbnailCache] Blob validation failed: suspiciously large (${blob.size} bytes)`);
+      return false;
+    }
+
+    console.log(`[ThumbnailCache] Blob validation passed: ${blob.size} bytes, type: ${blob.type}`);
+    return true;
+  }
+
   /**
    * Check if frame is cached (does not update LRU timestamp)
    */
@@ -270,6 +349,7 @@ export class ThumbnailCache {
     }
     this.cache.clear();
     this.loadingQueue.clear();
+    this.deferredRequests.clear();
     console.log('[ThumbnailCache] Cache cleared');
   }
   

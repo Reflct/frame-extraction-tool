@@ -1,29 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart, Bar, YAxis, XAxis, Tooltip, Cell } from 'recharts';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type FrameData, type FrameMetadata } from '@/types/frame';
 import { FramePreviewDialog } from './frame-preview-dialog';
 import { frameStorage } from '@/lib/frameStorage';
 import { ChartTooltip } from './chart-tooltip';
 import { ThumbnailCache } from '@/lib/thumbnailCache';
+import CanvasFrameChart from './frame-canvas-chart';
 
 interface FrameAnalysisProps {
   frames: FrameData[];
   selectedFrames: Set<string>;
   onFrameSelectAction: (frameId: string) => void;
   showImageGrid?: boolean;
-}
-
-interface ChartMouseMoveState {
-  activePayload?: Array<{
-    payload: {
-      frameId: string;
-    }
-  }>;
-  chartX?: number;
-  chartY?: number;
 }
 
 export function FrameAnalysis({
@@ -43,28 +33,38 @@ export function FrameAnalysis({
   // NEW: Replace Map with ThumbnailCache for memory-efficient thumbnail management
   const thumbnailCache = useRef<ThumbnailCache>(new ThumbnailCache(200));
   const [thumbnailUrls, setThumbnailUrls] = useState<Map<string, string>>(new Map());
-  const attemptedFrameIds = useRef<Set<string>>(new Set()); // Track frames we've already tried to load (prevents re-attempts)
-  const chartRef = useRef<HTMLDivElement>(null);
+  const failedFrameIds = useRef<Set<string>>(new Set()); // Track frames that failed generation (don't retry these)
   const preloadTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const scrollTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Component lifecycle - cleanup cache on unmount
+  // Throttle thumbnail URL updates to prevent cascading re-renders during rapid mouse movement
+  const thumbnailUpdateThrottleRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Component lifecycle - cleanup cache on unmount and setup eviction callback
   useEffect(() => {
     console.log('[FRAME_ANALYSIS] Component mounted');
     const cache = thumbnailCache.current;
-    const attempted = attemptedFrameIds.current;
-    const scrollTimer = scrollTimerRef.current;
+    const failed = failedFrameIds.current;
+
+    // Register callback to clean up state when cache evicts entries
+    cache.setEvictionCallback((evictedFrameIds) => {
+      console.log('[FRAME_ANALYSIS] Cache evicted frames, cleaning up state:', evictedFrameIds);
+      setThumbnailUrls(prev => {
+        const updated = new Map(prev);
+        evictedFrameIds.forEach(id => updated.delete(id));
+        return updated;
+      });
+    });
 
     return () => {
       const stats = cache.getStats();
       console.log('[FRAME_ANALYSIS] Component unmounting, cache stats:', stats);
       cache.clear();
-      attempted.clear();
+      failed.clear();
       setThumbnailUrls(new Map());
 
-      // Clean up scroll timer
-      if (scrollTimer) {
-        clearTimeout(scrollTimer);
+      // Clean up thumbnail throttle timer
+      if (thumbnailUpdateThrottleRef.current) {
+        clearTimeout(thumbnailUpdateThrottleRef.current);
       }
     };
   }, []);
@@ -83,17 +83,22 @@ export function FrameAnalysis({
       // 1. Load hovered frame immediately (high priority)
       const hoveredId = hoveredFrame.id;
 
-      // Skip if already attempted
-      if (attemptedFrameIds.current.has(hoveredId)) {
-        console.log('[FRAME_ANALYSIS] Hovered frame already attempted:', hoveredId);
+      // Skip if frame generation permanently failed
+      if (failedFrameIds.current.has(hoveredId)) {
+        console.log('[FRAME_ANALYSIS] Hovered frame generation failed previously:', hoveredId);
         return;
       }
 
-      attemptedFrameIds.current.add(hoveredId);
+      // Always attempt to load (cache hit will be instant, cache miss will retry from queue)
       const hoveredUrl = await thumbnailCache.current.get(hoveredId);
       if (hoveredUrl) {
+        // Always update state immediately for hovered frames (don't throttle)
         setThumbnailUrls(prev => new Map(prev.set(hoveredId, hoveredUrl)));
         console.log('[FRAME_ANALYSIS] Loaded hovered frame:', hoveredId);
+      } else {
+        // Only mark as failed if generation actually failed (not just queue full)
+        console.log('[FRAME_ANALYSIS] Failed to load hovered frame:', hoveredId);
+        // Don't mark as failed yet - could be queue full, will retry next hover
       }
 
       // 2. Preload nearby frames (debounced to avoid excessive loading)
@@ -109,14 +114,12 @@ export function FrameAnalysis({
         const nearbyFrameIds = frames
           .slice(start, end)
           .map(f => f.id)
-          .filter(id => !attemptedFrameIds.current.has(id)); // Only preload frames we haven't tried yet
+          .filter(id => !failedFrameIds.current.has(id)); // Skip frames that permanently failed
 
         if (nearbyFrameIds.length > 0) {
           console.log('[FRAME_ANALYSIS] Preloading', nearbyFrameIds.length, 'nearby frames');
-          // Mark all as attempted before loading
-          nearbyFrameIds.forEach(id => attemptedFrameIds.current.add(id));
 
-          // Non-blocking preload in background
+          // Non-blocking preload in background (no attempt tracking, let cache handle retries)
           thumbnailCache.current.preload(nearbyFrameIds).catch(() => {
             // Silently ignore preload errors
           });
@@ -139,92 +142,15 @@ export function FrameAnalysis({
     return thumbnailUrls.get(frameId);
   }, [thumbnailUrls]);
 
-  // Memoize frames lookup Map for O(1) access in event handlers
-  const frameMap = useMemo(() => {
-    const map = new Map<string, FrameData>();
-    frames.forEach(frame => map.set(frame.id, frame));
-    return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frames.length]); // Only recreate when frame count changes, not on every reference change
 
-  // Memoize chart data array to prevent recreation on every render
-  const chartData = useMemo(() => {
-    return frames.map((frame, index) => ({
-      x: index,
-      y: frame.sharpnessScore || 0,
-      frameId: frame.id,
-      frameIndex: index // Used by XAxis for proper coordinate mapping when virtualized
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frames.length]); // Only recreate when frame count changes, not on every reference change
-
-  // Calculate visible frames based on scroll position (viewport virtualization)
-  const visibleChartData = useMemo(() => {
-    const BAR_WIDTH = 10; // pixels per bar (8px bar + 2px gap)
-    const VISIBLE_RANGE = 250; // number of bars to render around viewport center
-
-    // Calculate which frames are in the visible viewport
-    const centerFrameIndex = Math.floor(scrollPosition / BAR_WIDTH);
-
-    // Render frames in range: center ± VISIBLE_RANGE
-    const startIndex = Math.max(0, centerFrameIndex - VISIBLE_RANGE);
-    const endIndex = Math.min(frames.length, centerFrameIndex + VISIBLE_RANGE);
-
-    console.log('[CHART_DATA] Calculating visible range - scrollPosition:', scrollPosition, 'centerFrameIndex:', centerFrameIndex, 'startIndex:', startIndex, 'endIndex:', endIndex);
-
-    try {
-      // Return visible frames with their actual frame index for XAxis positioning
-      // This ensures Recharts knows the semantic position of each bar, not just array index
-      const sliced = chartData.slice(startIndex, endIndex);
-      const result = sliced.map((item, visibleIndex) => ({
-        ...item,
-        frameIndex: startIndex + visibleIndex // Actual frame position in dataset
-      }));
-
-      console.log('[CHART_DATA] Calculated visibleChartData:', {
-        scrollPosition,
-        centerFrameIndex,
-        startIndex,
-        endIndex,
-        slicedLength: sliced.length,
-        resultLength: result.length,
-        firstFrameIndex: result[0]?.frameIndex,
-        lastFrameIndex: result[result.length - 1]?.frameIndex,
-        totalFrames: frames.length
-      });
-
-      return result;
-    } catch (error) {
-      console.error('[CHART_DATA] ERROR calculating visibleChartData:', error);
-      console.error('[CHART_DATA] Error details:', {
-        scrollPosition,
-        centerFrameIndex,
-        startIndex,
-        endIndex,
-        chartDataLength: chartData.length,
-        framesLength: frames.length
-      });
-      throw error;
-    }
-  }, [chartData, scrollPosition, frames.length]);
-
-  // Calculate dynamic chart width based on visible bar count
-  // This ensures bars are always 8px (not stretched/squished by Recharts)
-  const dynamicChartWidth = useMemo(() => {
-    const BAR_WIDTH = 10; // 8px bar + 2px gap
-    // Width should accommodate visible data count, not all frames
-    const width = Math.max(visibleChartData.length * BAR_WIDTH, 100);
-    console.log('[CHART_WIDTH] Calculated dynamic chart width:', width, 'for', visibleChartData.length, 'visible bars');
-    return width;
-  }, [visibleChartData.length]);
 
   // Monitor thumbnail URL map growth and cache health
   useEffect(() => {
-    if (thumbnailUrls.size > 0 || attemptedFrameIds.current.size > 0) {
+    if (thumbnailUrls.size > 0 || failedFrameIds.current.size > 0) {
       const cacheStats = thumbnailCache.current.getStats();
       console.log('[FRAME_ANALYSIS] Thumbnail stats:', {
         mapSize: thumbnailUrls.size,
-        attemptedCount: attemptedFrameIds.current.size,
+        failedCount: failedFrameIds.current.size,
         cacheSize: cacheStats.size,
         cacheLoading: cacheStats.loading,
         cacheUtilization: cacheStats.utilizationPercent + '%'
@@ -304,70 +230,83 @@ export function FrameAnalysis({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hoveredFrame?.id, onFrameSelectAction]);
 
-  // Optimized mouse move handler
-  const handleChartMouseMove = useCallback((state: ChartMouseMoveState) => {
-    try {
-      if (state?.activePayload?.[0]?.payload && chartRef.current) {
-        const { frameId } = state.activePayload[0].payload;
-        console.log('[CHART_HOVER] Hovering over frame:', frameId);
+  // Canvas chart hover handler
+  const handleCanvasHover = useCallback((frame: FrameData, position: { x: number; y: number }) => {
+    setHoveredFrame(frame);
+    setTooltipPosition(position);
+  }, []);
 
-        if (!frameId) {
-          console.warn('[CHART_HOVER] Invalid frameId:', frameId);
-          return;
-        }
-
-        // Look up the full frame object using O(1) Map instead of O(N) find()
-        const frame = frameMap.get(frameId);
-        if (!frame) {
-          console.warn('[CHART_HOVER] Could not find frame with ID:', frameId);
-          return;
-        }
-
-        setHoveredFrame(frame);
-
-        // Get the scrollable container's position
-        const containerRect = chartRef.current.getBoundingClientRect();
-        const scrollLeft = chartRef.current.scrollLeft;
-
-        // Adjust the chart coordinates relative to the viewport
-        if (typeof state.chartX === 'number' && typeof state.chartY === 'number') {
-          setTooltipPosition({
-            x: containerRect.left + state.chartX - scrollLeft,
-            y: containerRect.top + state.chartY
-          });
-        }
-      }
-    } catch (error) {
-      console.error('[CHART_HOVER] Error in handleChartMouseMove:', error);
-      console.error('[CHART_HOVER] Error details:', {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        state
-      });
-    }
-  }, [frameMap]);
-
-  // Handle mouse leave
-  const handleChartMouseLeave = useCallback(() => {
+  // Canvas chart leave handler
+  const handleCanvasLeave = useCallback(() => {
     setHoveredFrame(null);
     setTooltipPosition(null);
   }, []);
 
-  // Handle horizontal scroll for viewport virtualization
-  // Debounce scroll events to avoid excessive state updates and re-renders
-  const handleChartScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const scrollLeft = (e.target as HTMLDivElement).scrollLeft;
+  // Canvas chart click handler
+  const handleCanvasClick = useCallback((frame: FrameData) => {
+    setSelectedFrame(frame);
+    setIsPreviewOpen(true);
+    convertBlobToUint8Array(frame);
+  }, [convertBlobToUint8Array]);
 
-    // Clear pending scroll update
-    if (scrollTimerRef.current) {
-      clearTimeout(scrollTimerRef.current);
+  // Get container width for canvas virtualization
+  const [containerWidth, setContainerWidth] = useState(0);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const minimapRef = useRef<HTMLDivElement>(null);
+
+  // Canvas scroll handler - update scroll position from internal canvas events
+  const handleCanvasScroll = useCallback((scrollDelta: number) => {
+    setScrollPosition((prev) => {
+      // Calculate max scroll based on chart width vs container width
+      const chartWidth = frames.length * 10; // BAR_WIDTH = 10
+      const maxScroll = Math.max(0, chartWidth - containerWidth);
+      const newScroll = Math.max(0, Math.min(prev + scrollDelta, maxScroll));
+      return newScroll;
+    });
+  }, [frames.length, containerWidth]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (canvasContainerRef.current) {
+        const width = canvasContainerRef.current.offsetWidth;
+        setContainerWidth(width);
+        console.log('[FrameAnalysis] Container width updated:', width);
+      }
+    };
+
+    // Use ResizeObserver for accurate sizing after DOM layout
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+
+    if (canvasContainerRef.current) {
+      resizeObserver.observe(canvasContainerRef.current);
+      // Also call immediately in case ResizeObserver doesn't fire on first layout
+      handleResize();
     }
 
-    // Debounce: only update state after scrolling stops
-    scrollTimerRef.current = setTimeout(() => {
-      setScrollPosition(scrollLeft);
-      console.log('[CHART_VIEWPORT] Scroll position updated:', scrollLeft);
-    }, 50); // 50ms debounce - responsive but not excessive
+    // Fallback: also listen to window resize
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  // Lock page scroll when hovering over minimap (same as main chart)
+  useEffect(() => {
+    const handleWheelCapture = (e: WheelEvent) => {
+      if (minimapRef.current && minimapRef.current.contains(e.target as Node)) {
+        e.preventDefault();
+      }
+    };
+
+    const wheelOptions = { passive: false, capture: true } as const;
+    window.addEventListener('wheel', handleWheelCapture, wheelOptions);
+    return () => {
+      window.removeEventListener('wheel', handleWheelCapture, wheelOptions);
+    };
   }, []);
 
   return (
@@ -409,94 +348,135 @@ export function FrameAnalysis({
         </div>
       </div>
 
-      {/* Histogram */}
-      <div className="relative h-[300px] w-full overflow-hidden">
-        <div
-          ref={chartRef}
-          className="h-full overflow-x-auto"
-          style={{ width: '100%' }}
-          onScroll={handleChartScroll}
-        >
-          <div style={{
-            width: `${Math.max(frames.length * 10, 100)}px`,
-            height: '100%'
-          }}>
-            {visibleChartData.length > 0 ? (
-              <BarChart
-                data={visibleChartData}
-                onMouseMove={handleChartMouseMove}
-                onMouseLeave={handleChartMouseLeave}
-                margin={{ left: 40, right: 0 }}
-                width={dynamicChartWidth}
-                height={300}
-                barCategoryGap="0%"
-              >
-                  <YAxis
-                    tickFormatter={(value) => value.toFixed(1)}
-                    width={40}
-                    stroke="#9CA3AF"
-                  />
-                  <XAxis
-                    hide={true}
-                    axisLine={{ stroke: '#E5E7EB' }}
-                    dataKey="x"
-                    type="number"
-                  />
-                  <Tooltip
-                    cursor={{ fill: 'rgba(0, 102, 255, 0.1)' }}
-                    content={() => null}
-                  />
-                  <Bar
-                    dataKey="y"
-                    barSize={8}
-                    onClick={(data) => {
-                      try {
-                        const frameId = (data as unknown as { frameId: string }).frameId;
-                        console.log('[BAR_CLICK] Clicked bar with frameId:', frameId);
-                        const frame = frameMap.get(frameId);
-                        if (frame) {
-                          setSelectedFrame(frame);
-                          setIsPreviewOpen(true);
-                          convertBlobToUint8Array(frame);
-                        } else {
-                          console.warn('[BAR_CLICK] Frame not found in map:', frameId);
-                        }
-                      } catch (error) {
-                        console.error('[BAR_CLICK] Error handling bar click:', error);
-                      }
-                    }}
-                    cursor="pointer"
-                  >
-                    {visibleChartData.map((item) => {
-                      try {
-                        const frame = frameMap.get(item.frameId);
-                        return (
-                          <Cell
-                            key={item.frameId}
-                            fill={frame && selectedFrames.has(frame.id) ? '#0066FF' : '#E5E7EB'}
-                            className="cursor-pointer hover:opacity-80"
-                          />
-                        );
-                      } catch (error) {
-                        console.error('[CELL_RENDER] Error rendering cell for frameId:', item.frameId, error);
-                        return (
-                          <Cell
-                            key={item.frameId}
-                            fill="#E5E7EB"
-                            className="cursor-pointer hover:opacity-80"
-                          />
-                        );
-                      }
-                    })}
-                  </Bar>
-              </BarChart>
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-500">
-                No frames to display
-              </div>
-            )}
-          </div>
+      {/* Histogram - Canvas-based chart with internal scroll handling */}
+      <div className="space-y-2">
+        <div ref={canvasContainerRef} className="relative h-[300px] w-full">
+          {frames.length > 0 ? (
+            <CanvasFrameChart
+              frames={frames}
+              selectedFrames={selectedFrames}
+              hoveredFrameId={hoveredFrame?.id || null}
+              scrollOffset={scrollPosition}
+              containerWidth={containerWidth}
+              height={300}
+              onHover={handleCanvasHover}
+              onLeave={handleCanvasLeave}
+              onClick={handleCanvasClick}
+              onScroll={handleCanvasScroll}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              No frames to display
+            </div>
+          )}
         </div>
+
+        {/* Minimap Scrollbar - Click to jump to position, shows chart preview */}
+        {frames.length > 0 && (
+          <div className="w-full py-2" style={{ paddingLeft: '40px', paddingRight: '0px' }}>
+            <div
+              ref={minimapRef}
+              className="relative w-full h-16 bg-gray-100 rounded cursor-pointer overflow-hidden"
+              style={{ backgroundColor: '#f3f4f6' }}
+              onClick={(e) => {
+                const trackElement = e.currentTarget;
+                const trackRect = trackElement.getBoundingClientRect();
+                const clickX = e.clientX - trackRect.left;
+
+                // Calculate what percentage along the timeline was clicked
+                const clickPercentage = Math.max(0, Math.min(clickX / trackRect.width, 1));
+
+                // Convert to scroll position
+                const scrollRange = (frames.length * 10) - containerWidth;
+                const targetScrollPosition = clickPercentage * scrollRange;
+
+                // Calculate delta from current position
+                const scrollDelta = targetScrollPosition - scrollPosition;
+                handleCanvasScroll(scrollDelta);
+              }}
+              onWheel={(e) => {
+                e.preventDefault();
+                // Scroll amount: 30px per wheel tick
+                const scrollDelta = e.deltaY > 0 ? 30 : -30;
+                handleCanvasScroll(scrollDelta);
+              }}
+            >
+              {/* Mini chart background - SVG graph with aggregated data */}
+              <svg
+                viewBox="0 0 100 100"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  opacity: 0.6,
+                  display: 'block'
+                }}
+                preserveAspectRatio="none"
+              >
+                {(() => {
+                  // Aggregate frames into buckets for readable visualization
+                  // Use 500 data points max for smoother line
+                  const MAX_DATA_POINTS = 500;
+                  const bucketSize = Math.ceil(frames.length / MAX_DATA_POINTS);
+                  const aggregatedData: number[] = [];
+
+                  // Calculate max sharpness once
+                  const maxSharpness = Math.max(...frames.map(f => f.sharpnessScore || 0), 100);
+
+                  // Aggregate frames into buckets - use average of sharpness in each bucket
+                  for (let i = 0; i < frames.length; i += bucketSize) {
+                    const bucketEnd = Math.min(i + bucketSize, frames.length);
+                    const bucketFrames = frames.slice(i, bucketEnd);
+                    const avgSharpness = bucketFrames.reduce((sum, f) => sum + (f.sharpnessScore || 0), 0) / bucketFrames.length;
+                    aggregatedData.push(avgSharpness);
+                  }
+
+                  // Generate SVG points for polyline
+                  // Add 10% padding above and below data to prevent touching edges
+                  const PADDING = 10;
+                  const yRange = 100 - (PADDING * 2);
+                  const points = aggregatedData
+                    .map((sharpness, idx) => {
+                      const x = (idx / (aggregatedData.length - 1 || 1)) * 100;
+                      const normalizedY = (sharpness / maxSharpness) * yRange;
+                      const y = PADDING + (yRange - normalizedY);
+                      return `${x},${y}`;
+                    })
+                    .join(' ');
+
+                  return (
+                    <polyline
+                      points={points}
+                      fill="none"
+                      stroke="#3b82f6"
+                      strokeWidth="1.5"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  );
+                })()}
+              </svg>
+
+              {/* Viewport indicator - shows which part of chart is currently visible */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  backgroundColor: 'rgba(59, 130, 246, 0.3)',
+                  borderLeft: '2px solid #3b82f6',
+                  borderRight: '2px solid #3b82f6',
+                  left: `${containerWidth > 0 ? (scrollPosition / ((frames.length * 10) - containerWidth)) * 100 : 0}%`,
+                  width: `${containerWidth > 0 ? (containerWidth / (frames.length * 10)) * 100 : 100}%`,
+                  minWidth: '40px',
+                  pointerEvents: 'none',
+                  transition: 'none'
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <ChartTooltip
