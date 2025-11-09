@@ -40,11 +40,16 @@ export function FrameAnalysis({
   // Throttle thumbnail URL updates to prevent cascading re-renders during rapid mouse movement
   const thumbnailUpdateThrottleRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Track retry attempts for hovered frames - map of frameId to retry attempt count
+  // This ensures we retry hovered frames even when queue is full
+  const hoveredRetryCountRef = useRef<Map<string, number>>(new Map());
+
   // Component lifecycle - cleanup cache on unmount and setup eviction callback
   useEffect(() => {
     const cache = thumbnailCache.current;
     const failed = failedFrameIds.current;
     const throttleRef = thumbnailUpdateThrottleRef.current;
+    const retryMap = hoveredRetryCountRef.current;
 
     // Register callback to clean up state when cache evicts entries
     cache.setEvictionCallback((evictedFrameIds) => {
@@ -59,6 +64,7 @@ export function FrameAnalysis({
       cache.clear();
       failed.clear();
       setThumbnailUrls(new Map());
+      retryMap.clear();
 
       // Clean up thumbnail throttle timer
       if (throttleRef) {
@@ -86,14 +92,31 @@ export function FrameAnalysis({
         return;
       }
 
-      // Always attempt to load (cache hit will be instant, cache miss will retry from queue)
+      // Attempt to load with exponential backoff retry for queue-full scenarios
+      // This ensures hovered frames are retried even if the loading queue is saturated
       const hoveredUrl = await thumbnailCache.current.get(hoveredId);
-      if (hoveredUrl) {
+
+      if (!hoveredUrl) {
+        // Retry logic for hovered frames when queue is full
+        // Track retry attempts to avoid infinite loops
+        const currentRetries = hoveredRetryCountRef.current.get(hoveredId) || 0;
+        const MAX_RETRIES = 3;
+
+        if (currentRetries < MAX_RETRIES) {
+          // Implement exponential backoff: 100ms, 200ms, 400ms
+          const delay = Math.pow(2, currentRetries) * 100;
+          hoveredRetryCountRef.current.set(hoveredId, currentRetries + 1);
+
+          // Schedule retry - this will pick up the thumbnail when queue has space
+          setTimeout(() => {
+            loadHoveredAndPreload();
+          }, delay);
+        }
+      } else {
+        // Success: clear retry count and update state
+        hoveredRetryCountRef.current.delete(hoveredId);
         // Always update state immediately for hovered frames (don't throttle)
         setThumbnailUrls(prev => new Map(prev.set(hoveredId, hoveredUrl)));
-      } else {
-        // Only mark as failed if generation actually failed (not just queue full)
-        // Don't mark as failed yet - could be queue full, will retry next hover
       }
 
       // 2. Preload nearby frames (debounced to avoid excessive loading)
