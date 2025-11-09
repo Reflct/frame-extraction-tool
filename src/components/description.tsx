@@ -6,7 +6,7 @@ export function Description() {
 
   return (
     <div className="max-w-3xl pl-7">
-      <h1 className="text-[clamp(36px,8vw,64px)] font-medium mb-4 leading-[1.1]">Sharp Frames Tool</h1>
+      <h1 className="text-[clamp(36px,8vw,64px)] font-medium mb-4 leading-[1.1]">Sharp Frames</h1>
       <p className="text-lg text-gray-700">
         Extract full size frames from your video or analyze images from a directory, with blur detection and smart frame selection 
         designed for 3DGS and NeRF dataset preparation. 
