@@ -33,7 +33,7 @@ export function ProgressIndicator({
             <span>Extracting Frames</span>
             {extractionMethod && (
               <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
-                {extractionMethod}
+                {extractionMethod === 'Canvas' ? 'Legacy Extraction Method' : extractionMethod}
               </span>
             )}
           </div>

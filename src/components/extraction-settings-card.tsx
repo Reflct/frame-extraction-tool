@@ -3,7 +3,6 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ExtractionControls } from '@/components/extraction-controls';
-import { ExtractionMethodIndicator } from '@/components/extraction-method-indicator';
 import { ProgressIndicator } from '@/components/progress-indicator';
 import { TimeRangeDialog } from '@/components/time-range-dialog';
 import { type VideoMetadata } from '@/lib/videoUtils';
@@ -22,11 +21,6 @@ interface ExtractionSettingsCardProps {
   timeRange: [number, number];
   videoRef: React.RefObject<HTMLVideoElement | null>;
   extractionMethod?: 'MediaBunny' | 'Canvas' | null;
-  fallbackReason?: string | null;
-  performanceMetrics?: {
-    duration: number;
-    framesPerSecond: number;
-  } | null;
   onFpsChangeAction: (fps: number) => void;
   onFormatChangeAction: (format: 'jpeg' | 'png') => void;
   onPrefixChangeAction: (prefix: string) => void;
@@ -48,8 +42,6 @@ export function ExtractionSettingsCard({
   timeRange,
   videoRef,
   extractionMethod,
-  fallbackReason,
-  performanceMetrics,
   onFpsChangeAction,
   onFormatChangeAction,
   onPrefixChangeAction,
@@ -67,15 +59,6 @@ export function ExtractionSettingsCard({
           <h2 className="text-xl font-semibold">Extraction Settings</h2>
         </div>
         <div className="w-full">
-          <div className="space-y-4 mb-6">
-            <ExtractionMethodIndicator 
-              currentMethod={extractionMethod}
-              fallbackReason={fallbackReason}
-              performanceMetrics={performanceMetrics}
-              processing={processing}
-              videoFile={videoMetadata ? null : null}
-            />
-          </div>
           {!processing ? (
             <div className="space-y-6">
               <ExtractionControls
