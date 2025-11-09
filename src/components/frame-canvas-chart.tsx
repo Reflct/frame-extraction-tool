@@ -232,8 +232,6 @@ const CanvasFrameChart: React.FC<CanvasFrameChartProps> = ({
     // Draw only visible bars (virtualization)
     // Bars are positioned relative to viewport, not absolute chart position
     const { startIndex, endIndex } = visibleRange;
-    let barsDrawn = 0;
-    const startTime = performance.now();
 
     for (let i = startIndex; i < endIndex; i++) {
       const frame = frames[i];
@@ -252,8 +250,6 @@ const CanvasFrameChart: React.FC<CanvasFrameChartProps> = ({
       if (barX + 8 < 0 || barX > canvasWidth) {
         continue;
       }
-
-      barsDrawn++;
 
       // Determine color
       let color = UNSELECTED_COLOR;
@@ -282,7 +278,7 @@ const CanvasFrameChart: React.FC<CanvasFrameChartProps> = ({
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
-  }, [frames, selectedFrames, hoveredFrameId, scrollOffset, containerWidth, maxSharpnessScore, height, visibleRange]);
+  }, [frames, selectedFrames, hoveredFrameId, containerWidth, maxSharpnessScore, height, visibleRange]);
 
   // Trigger render on prop changes
   useEffect(() => {

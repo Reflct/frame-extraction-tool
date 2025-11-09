@@ -87,7 +87,7 @@ export class ThumbnailCache {
             setTimeout(() => reject(new Error('Thumbnail load timeout')), 5000)
           )
         ]);
-      } catch (error) {
+      } catch {
         blob = undefined;
       }
 
@@ -98,7 +98,7 @@ export class ThumbnailCache {
           if (generated) {
             blob = generated;
           }
-        } catch (error) {
+        } catch {
           blob = undefined;
         }
       }
@@ -126,10 +126,10 @@ export class ThumbnailCache {
         this.evictIfNeeded();
 
         return url;
-      } catch (error) {
+      } catch {
         return null;
       }
-    } catch (error) {
+    } catch {
       return null;
     } finally {
       this.loadingQueue.delete(frameId);
@@ -151,7 +151,7 @@ export class ThumbnailCache {
             setTimeout(() => reject(new Error('Frame blob load timeout')), 5000)
           )
         ]);
-      } catch (error) {
+      } catch {
         return null;
       }
 
@@ -163,7 +163,7 @@ export class ThumbnailCache {
       let thumbnailBlob: Blob;
       try {
         thumbnailBlob = await createThumbnail(fullBlob);
-      } catch (error) {
+      } catch {
         return null;
       }
 
@@ -183,12 +183,12 @@ export class ThumbnailCache {
             timestamp: Date.now()
           });
         }
-      } catch (error) {
+      } catch {
         // Continue - we still have the blob to return
       }
 
       return thumbnailBlob;
-    } catch (error) {
+    } catch {
       return null;
     }
   }

@@ -239,7 +239,7 @@ class FrameStorage {
       }
 
       return frame.blob;
-    } catch (error) {
+    } catch {
       return undefined;
     }
   }

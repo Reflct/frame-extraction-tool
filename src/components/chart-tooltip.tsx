@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { type FrameData } from '@/types/frame';
 import { useEffect, useRef, useState } from 'react';
 
@@ -72,10 +73,11 @@ export function ChartTooltip({ frame, position, getThumbnailUrl }: ChartTooltipP
             </div>
           )}
           {thumbnailUrl && (
-            <img
+            <Image
               src={thumbnailUrl}
               alt={frame.name}
               className="w-full h-full object-cover"
+              fill
               onLoad={() => {
                 setIsLoading(false);
                 setLoadError(false);

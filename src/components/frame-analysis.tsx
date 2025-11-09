@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { type FrameData, type FrameMetadata } from '@/types/frame';
 import { FramePreviewDialog } from './frame-preview-dialog';
@@ -43,6 +44,7 @@ export function FrameAnalysis({
   useEffect(() => {
     const cache = thumbnailCache.current;
     const failed = failedFrameIds.current;
+    const throttleRef = thumbnailUpdateThrottleRef.current;
 
     // Register callback to clean up state when cache evicts entries
     cache.setEvictionCallback((evictedFrameIds) => {
@@ -59,8 +61,8 @@ export function FrameAnalysis({
       setThumbnailUrls(new Map());
 
       // Clean up thumbnail throttle timer
-      if (thumbnailUpdateThrottleRef.current) {
-        clearTimeout(thumbnailUpdateThrottleRef.current);
+      if (throttleRef) {
+        clearTimeout(throttleRef);
       }
     };
   }, []);
@@ -143,17 +145,18 @@ export function FrameAnalysis({
   // Render frame thumbnail component
   const FrameThumbnail = useCallback(({ frame }: { frame: FrameData }) => {
     const url = getThumbnailUrl(frame.id);
-    
+
     if (!url) {
       return null;
     }
 
     return (
       <div className="relative w-full h-full">
-        <img
+        <Image
           src={url}
           alt={`Frame ${frame.id}`}
           className="w-full h-full object-cover"
+          fill
           loading="lazy"
         />
       </div>
