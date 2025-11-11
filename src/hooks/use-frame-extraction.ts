@@ -7,6 +7,7 @@ import { calculateSharpnessScore } from '@/lib/opencvUtils';
 import { type FrameData } from '@/types/frame';
 import { getVideoMetadata } from '@/lib/videoUtils';
 import { getSelectedFrames } from '@/utils/frame-selection';
+import { sanitizeFilename } from '@/lib/zipUtils';
 import JSZip from 'jszip';
 import { frameStorage } from '@/lib/frameStorage';
 import { type FrameMetadata } from '@/types/frame';
@@ -410,11 +411,12 @@ export function useFrameExtraction() {
     try {
       const zip = new JSZip();
       
-      // Add selected frames to zip
+      // Add selected frames to zip with sanitized filenames for Windows 11 compatibility
       await Promise.all(selectedFrames.map(async (frame) => {
         const blob = await frameStorage.getFrameBlob(frame.id);
         if (blob) {
-          zip.file(frame.name, blob);
+          const sanitizedName = sanitizeFilename(frame.name);
+          zip.file(sanitizedName, blob);
         }
       }));
 
@@ -427,7 +429,9 @@ export function useFrameExtraction() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      // Delay URL revocation to ensure download completes before cleanup
+      // This is critical for Windows 11 compatibility where downloads may start slower
+      setTimeout(() => URL.revokeObjectURL(url), 100);
     } catch {
       updateState(prev => ({
         ...prev,
