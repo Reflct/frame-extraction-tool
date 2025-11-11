@@ -409,30 +409,45 @@ export function useFrameExtraction() {
     }
 
     try {
+      console.log(`[Download] Starting download of ${selectedFrames.length} frames`);
       const zip = new JSZip();
-      
+      let successfulFrames = 0;
+      let failedFrames = 0;
+
       // Add selected frames to zip with sanitized filenames for Windows 11 compatibility
       await Promise.all(selectedFrames.map(async (frame) => {
         const blob = await frameStorage.getFrameBlob(frame.id);
         if (blob) {
           const sanitizedName = sanitizeFilename(frame.name);
           zip.file(sanitizedName, blob);
+          successfulFrames++;
+        } else {
+          failedFrames++;
         }
       }));
 
+      console.log(`[Download] Loaded ${successfulFrames} frames (${failedFrames} failed to load)`);
+
       // Generate and download zip
       const content = await zip.generateAsync({ type: 'blob' });
+      console.log(`[Download] Generated ZIP file: ${(content.size / 1024 / 1024).toFixed(2)} MB`);
+
       const url = URL.createObjectURL(content);
       const link = document.createElement('a');
       link.href = url;
       link.download = 'selected-frames.zip';
       document.body.appendChild(link);
       link.click();
+      console.log('[Download] Click triggered, URL revocation scheduled for 100ms delay');
       document.body.removeChild(link);
       // Delay URL revocation to ensure download completes before cleanup
       // This is critical for Windows 11 compatibility where downloads may start slower
-      setTimeout(() => URL.revokeObjectURL(url), 100);
-    } catch {
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        console.log('[Download] URL revoked, cleanup complete');
+      }, 100);
+    } catch (error) {
+      console.error('[Download] Error during download:', error);
       updateState(prev => ({
         ...prev,
         error: 'Failed to download frames'
