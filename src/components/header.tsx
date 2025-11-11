@@ -2,16 +2,18 @@
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Download } from 'lucide-react';
+import { Download, Loader } from 'lucide-react';
 import Image from 'next/image';
 
 interface HeaderProps {
   frameCount: number;
   selectedFrameCount: number;
+  isDownloading?: boolean;
+  downloadProgress?: number;
   onDownloadAction: () => void;
 }
 
-export function Header({ frameCount, selectedFrameCount, onDownloadAction }: HeaderProps) {
+export function Header({ frameCount, selectedFrameCount, isDownloading = false, downloadProgress = 0, onDownloadAction }: HeaderProps) {
   return (
     <div className="fixed top-3 px-7 left-0 right-0 z-50">
       <div className="container mx-auto">
@@ -52,19 +54,38 @@ export function Header({ frameCount, selectedFrameCount, onDownloadAction }: Hea
               >
                 Reflct.app
               </a>
-              <Button
-                onClick={onDownloadAction}
-                disabled={frameCount === 0}
-                className={`flex h-10 p-3 justify-center items-center gap-1 bg-[#3190ff] hover:bg-[#2170df] ${frameCount === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <Download className="w-4 h-4" />
-                <span 
-                  className="font-dm-mono text-white text-sm font-medium uppercase leading-[100%] text-edge-cap"
+              <div className="relative">
+                <Button
+                  onClick={onDownloadAction}
+                  disabled={frameCount === 0 || isDownloading}
+                  className={`flex h-10 p-3 justify-center items-center gap-1 bg-[#3190ff] hover:bg-[#2170df] transition-all ${
+                    frameCount === 0 || isDownloading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
-                  <span className="hidden md:inline">Download </span>
-                  Frames {frameCount > 0 && `(${selectedFrameCount})`}
-                </span>
-              </Button>
+                  {isDownloading ? (
+                    <Loader className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  <span
+                    className="font-dm-mono text-white text-sm font-medium uppercase leading-[100%] text-edge-cap"
+                  >
+                    <span className="hidden md:inline">
+                      {isDownloading ? 'Downloading' : 'Download'}{' '}
+                    </span>
+                    {isDownloading ? (
+                      `${downloadProgress}%`
+                    ) : (
+                      `Frames ${frameCount > 0 && `(${selectedFrameCount})`}`
+                    )}
+                  </span>
+                </Button>
+                {isDownloading && downloadProgress > 0 && (
+                  <div className="absolute bottom-0 left-0 h-1 bg-[#3190ff] transition-all duration-300"
+                    style={{ width: `${downloadProgress}%` }}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </Card>

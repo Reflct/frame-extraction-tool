@@ -18,6 +18,8 @@ export default function ExtractPage() {
     <MainLayout
       frameCount={state.frames.length}
       selectedFrameCount={getSelectedFramesCount(state)}
+      isDownloading={state.isDownloading}
+      downloadProgress={state.downloadProgress}
       onDownloadAction={handlers.handleDownload}
     >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 px-7">

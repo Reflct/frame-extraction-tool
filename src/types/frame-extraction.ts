@@ -33,6 +33,8 @@ export interface ExtractPageState {
   timeRange: [number, number];
   imageFiles: FileList | null;
   isImageMode: boolean;
+  isDownloading?: boolean;
+  downloadProgress?: number;
 }
 
 export interface ChartData {

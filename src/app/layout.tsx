@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { DM_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
+import { ServiceWorkerProvider } from "@/components/service-worker-provider";
 
 const dmMono = DM_Mono({
   weight: ["400", "500"],
@@ -41,7 +42,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={dmMono.variable}>
       <body className="min-h-screen bg-[#E0E0E0] font-roobert antialiased">
-        {children}
+        <ServiceWorkerProvider>
+          {children}
+        </ServiceWorkerProvider>
         <Analytics />
       </body>
     </html>

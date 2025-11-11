@@ -7,8 +7,7 @@ import { calculateSharpnessScore } from '@/lib/opencvUtils';
 import { type FrameData } from '@/types/frame';
 import { getVideoMetadata } from '@/lib/videoUtils';
 import { getSelectedFrames } from '@/utils/frame-selection';
-import { sanitizeFilename } from '@/lib/zipUtils';
-import JSZip from 'jszip';
+import { downloadFramesSmartZip } from '@/lib/streamingZipUtils';
 import { frameStorage } from '@/lib/frameStorage';
 import { type FrameMetadata } from '@/types/frame';
 
@@ -410,47 +409,81 @@ export function useFrameExtraction() {
 
     try {
       console.log(`[Download] Starting download of ${selectedFrames.length} frames`);
-      const zip = new JSZip();
-      let successfulFrames = 0;
-      let failedFrames = 0;
 
-      // Add selected frames to zip with sanitized filenames for Windows 11 compatibility
-      await Promise.all(selectedFrames.map(async (frame) => {
-        const blob = await frameStorage.getFrameBlob(frame.id);
-        if (blob) {
-          const sanitizedName = sanitizeFilename(frame.name);
-          zip.file(sanitizedName, blob);
-          successfulFrames++;
-        } else {
-          failedFrames++;
-        }
+      // Update state to show downloading
+      updateState(prev => ({
+        ...prev,
+        isDownloading: true,
+        downloadProgress: 0
       }));
+
+      // Load frame blobs from storage
+      console.log('[Download] Loading frame blobs from storage...');
+      const framesWithBlobs = await Promise.all(
+        selectedFrames.map(async (frame) => {
+          const blob = await frameStorage.getFrameBlob(frame.id);
+          return {
+            ...frame,
+            blob: blob || new Blob(),
+          };
+        })
+      );
+
+      const successfulFrames = framesWithBlobs.filter(f => f.blob.size > 0).length;
+      const failedFrames = framesWithBlobs.length - successfulFrames;
 
       console.log(`[Download] Loaded ${successfulFrames} frames (${failedFrames} failed to load)`);
 
-      // Generate and download zip
-      const content = await zip.generateAsync({ type: 'blob' });
-      console.log(`[Download] Generated ZIP file: ${(content.size / 1024 / 1024).toFixed(2)} MB`);
+      if (successfulFrames === 0) {
+        throw new Error('No frames could be loaded for download');
+      }
 
-      const url = URL.createObjectURL(content);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'selected-frames.zip';
-      document.body.appendChild(link);
-      link.click();
-      console.log('[Download] Click triggered, URL revocation scheduled for 100ms delay');
-      document.body.removeChild(link);
-      // Delay URL revocation to ensure download completes before cleanup
-      // This is critical for Windows 11 compatibility where downloads may start slower
+      // Use smart download which chooses between streaming and fallback
+      // This will use streaming for 1000+ frames, fallback for smaller downloads
+      await downloadFramesSmartZip(framesWithBlobs, {
+        filename: 'selected-frames.zip',
+        batchSize: 200,
+        onProgress: (progress) => {
+          console.log(
+            `[Download] Progress: ${progress.framesProcessed}/${progress.totalFrames} frames, ` +
+            `${(progress.bytesGenerated / 1024 / 1024).toFixed(2)} MB generated`
+          );
+          updateState(prev => ({
+            ...prev,
+            downloadProgress: Math.round((progress.framesProcessed / progress.totalFrames) * 100)
+          }));
+        },
+        onError: (error) => {
+          console.error('[Download] Download error:', error);
+          updateState(prev => ({
+            ...prev,
+            error: `Download failed: ${error.message}`
+          }));
+        }
+      });
+
+      console.log('[Download] Download complete');
+      updateState(prev => ({
+        ...prev,
+        isDownloading: false,
+        downloadProgress: 100
+      }));
+
+      // Clear progress after a short delay
       setTimeout(() => {
-        URL.revokeObjectURL(url);
-        console.log('[Download] URL revoked, cleanup complete');
-      }, 100);
+        updateState(prev => ({
+          ...prev,
+          downloadProgress: 0
+        }));
+      }, 2000);
+
     } catch (error) {
       console.error('[Download] Error during download:', error);
       updateState(prev => ({
         ...prev,
-        error: 'Failed to download frames'
+        isDownloading: false,
+        downloadProgress: 0,
+        error: error instanceof Error ? error.message : 'Failed to download frames'
       }));
     }
   }, [state, updateState]);

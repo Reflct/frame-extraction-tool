@@ -7,7 +7,8 @@
       "Bash(npm run build:*)",
       "WebFetch(domain:docs.mediabunny.dev)",
       "WebFetch(domain:github.com)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []
