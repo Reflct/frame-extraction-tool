@@ -7,6 +7,7 @@ import { ExtractionSettingsCard } from '@/components/extraction-settings-card';
 import { ErrorAlert } from '@/components/error-alert';
 import { FrameAnalysisCard } from '@/components/frame-analysis-card';
 import { ClearCacheDialog } from '@/components/clear-cache-dialog';
+import { DownloadOptionsDialog } from '@/components/download-options-dialog';
 import { useFrameExtraction } from '@/hooks/use-frame-extraction';
 import { getSelectedFrames, getSelectedFramesCount } from '@/utils/frame-selection';
 
@@ -84,6 +85,15 @@ export default function ExtractPage() {
         onPercentageThresholdChangeAction={(threshold) => setState(prev => ({ ...prev, percentageThreshold: threshold }))}
         onToggleFramesAction={() => setState(prev => ({ ...prev, showFrames: !prev.showFrames }))}
         onToggleFrameSelectionAction={handlers.handleToggleFrameSelection}
+      />
+
+      {/* Download Options Dialog */}
+      <DownloadOptionsDialog
+        open={state.showDownloadOptionsDialog || false}
+        frameCount={getSelectedFramesCount(state)}
+        onClose={() => setState(prev => ({ ...prev, showDownloadOptionsDialog: false }))}
+        onConfirm={handlers.handleDownloadConfirm}
+        isLoading={state.isDownloading}
       />
 
       {/* Clear Cache Dialog */}

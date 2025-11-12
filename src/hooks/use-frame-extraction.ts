@@ -399,7 +399,7 @@ export function useFrameExtraction() {
     }));
   }, [updateState]);
 
-  const handleDownload = useCallback(async () => {
+  const performDownload = useCallback(async (mode: 'chunked' | 'all') => {
     // Get selected frames using the utility function
     const selectedFrames = getSelectedFrames(state);
 
@@ -408,7 +408,7 @@ export function useFrameExtraction() {
     }
 
     try {
-      console.log(`[Download] Starting download of ${selectedFrames.length} frames`);
+      console.log(`[Download] Starting ${mode} download of ${selectedFrames.length} frames`);
 
       // Update state to show downloading
       updateState(prev => ({
@@ -438,11 +438,11 @@ export function useFrameExtraction() {
         throw new Error('No frames could be loaded for download');
       }
 
-      // Use smart download which chooses between streaming and fallback
-      // This will use streaming for 1000+ frames, fallback for smaller downloads
+      // Use smart download which chooses based on mode
       await downloadFramesSmartZip(framesWithBlobs, {
         filename: 'selected-frames.zip',
         batchSize: 200,
+        mode,
         onProgress: (progress) => {
           console.log(
             `[Download] Progress: ${progress.framesProcessed}/${progress.totalFrames} frames, ` +
@@ -487,6 +487,37 @@ export function useFrameExtraction() {
       }));
     }
   }, [state, updateState]);
+
+  const handleDownload = useCallback(async () => {
+    // Get selected frames using the utility function
+    const selectedFrames = getSelectedFrames(state);
+
+    if (selectedFrames.length === 0) {
+      return;
+    }
+
+    // For large downloads, show options dialog
+    if (selectedFrames.length >= 1000) {
+      console.log(`[Download] Large download detected (${selectedFrames.length} frames), showing options dialog`);
+      updateState(prev => ({
+        ...prev,
+        showDownloadOptionsDialog: true
+      }));
+      return;
+    }
+
+    // For smaller downloads, proceed directly
+    await performDownload('chunked');
+  }, [state, updateState, performDownload]);
+
+  const handleDownloadConfirm = useCallback(async (mode: 'chunked' | 'all') => {
+    updateState(prev => ({
+      ...prev,
+      showDownloadOptionsDialog: false
+    }));
+
+    await performDownload(mode);
+  }, [updateState, performDownload]);
 
   const handleClearCache = useCallback(async () => {
     try {
@@ -702,6 +733,7 @@ export function useFrameExtraction() {
       handleExtractFrames,
       handleCancel,
       handleDownload,
+      handleDownloadConfirm,
       handleClearCache,
       handleSelectAll,
       handleDeselectAll,

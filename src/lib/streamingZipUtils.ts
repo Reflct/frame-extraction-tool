@@ -4,6 +4,7 @@ import { sanitizeFilename } from './zipUtils';
 export interface StreamDownloadOptions {
   filename?: string;
   batchSize?: number;
+  mode?: 'chunked' | 'all';
   onProgress?: (progress: {
     framesProcessed: number;
     totalFrames: number;
@@ -243,27 +244,126 @@ export async function downloadFramesAsZipFallback(
 }
 
 /**
- * Smart download function that chooses between streaming and fallback
- * Uses streaming for large downloads (>1000 frames) if available
+ * Downloads frames as multiple chunked ZIPs to avoid memory issues with large downloads
+ * Each chunk contains up to 1000 frames, downloaded sequentially
+ * This prevents "Array buffer allocation failed" errors on Windows 11
+ */
+export async function downloadFramesAsChunkedZip(
+  frames: FrameWithBlob[],
+  options: StreamDownloadOptions = {}
+): Promise<void> {
+  const CHUNK_SIZE = 1000; // 1000 frames per chunk = ~150MB per chunk
+  const totalChunks = Math.ceil(frames.length / CHUNK_SIZE);
+
+  console.log(
+    `[ChunkedZip] Starting chunked download: ${frames.length} frames in ${totalChunks} chunks`
+  );
+
+  if (totalChunks === 1) {
+    // Single chunk, use standard fallback
+    console.log('[ChunkedZip] Only 1 chunk needed, using standard download');
+    await downloadFramesAsZipFallback(frames, options.filename, (progress) => {
+      options.onProgress?.({
+        ...progress,
+        bytesGenerated: 0,
+        currentBatch: 1,
+        totalBatches: 1,
+      });
+    });
+    return;
+  }
+
+  // Download multiple chunks sequentially
+  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+    const startIdx = chunkIndex * CHUNK_SIZE;
+    const endIdx = Math.min(startIdx + CHUNK_SIZE, frames.length);
+    const chunkFrames = frames.slice(startIdx, endIdx);
+    const chunkNumber = chunkIndex + 1;
+
+    console.log(
+      `[ChunkedZip] Processing chunk ${chunkNumber}/${totalChunks} (${chunkFrames.length} frames)`
+    );
+
+    // Create filename with chunk number if multiple chunks
+    const chunkFilename = totalChunks > 1
+      ? `selected-frames-chunk-${chunkNumber.toString().padStart(3, '0')}.zip`
+      : options.filename || 'selected-frames.zip';
+
+    try {
+      // Download this chunk
+      await downloadFramesAsZipFallback(chunkFrames, chunkFilename, (progress) => {
+        // Calculate overall progress across all chunks
+        const framesBeforeChunk = startIdx;
+        const totalFramesProcessed = framesBeforeChunk + progress.framesProcessed;
+        const progressPercentage = Math.round(
+          (totalFramesProcessed / frames.length) * 100
+        );
+
+        options.onProgress?.({
+          framesProcessed: totalFramesProcessed,
+          totalFrames: frames.length,
+          bytesGenerated: 0,
+          currentBatch: chunkNumber,
+          totalBatches: totalChunks,
+        });
+
+        console.log(
+          `[ChunkedZip] Chunk ${chunkNumber}/${totalChunks}: ${progressPercentage}% overall`
+        );
+      });
+
+      console.log(`[ChunkedZip] Chunk ${chunkNumber}/${totalChunks} download complete`);
+
+      // Add delay between chunk downloads to allow browser to process
+      if (chunkIndex < totalChunks - 1) {
+        console.log(
+          `[ChunkedZip] Waiting before next chunk download...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    } catch (error) {
+      console.error(
+        `[ChunkedZip] Error downloading chunk ${chunkNumber}/${totalChunks}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  console.log('[ChunkedZip] All chunks downloaded successfully');
+}
+
+/**
+ * Smart download function that chooses between chunked, streaming and fallback
+ * Uses chunked approach for very large downloads (>1000 frames) to prevent memory issues
  */
 export async function downloadFramesSmartZip(
   frames: FrameWithBlob[],
   options: StreamDownloadOptions = {}
 ): Promise<void> {
-  const STREAMING_THRESHOLD = 1000;
+  const mode = options.mode || 'chunked';
 
-  // Check if streaming is possible (service workers available)
-  const isStreamingAvailable =
-    typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
-
-  if (frames.length >= STREAMING_THRESHOLD && isStreamingAvailable) {
+  // If user selected "chunked" mode, use chunked approach
+  if (mode === 'chunked') {
     console.log(
-      '[StreamingZip] Using streaming download for large file set'
+      `[Download] User selected chunked mode for ${frames.length} frames`
     );
     try {
-      await downloadFramesAsStreamedZip(frames, options);
-    } catch {
-      console.warn('[StreamingZip] Streaming failed, falling back to standard download');
+      await downloadFramesAsChunkedZip(frames, options);
+      return;
+    } catch (error) {
+      console.error('[Download] Chunked download failed:', error);
+      options.onError?.(error instanceof Error ? error : new Error(String(error)));
+      throw error;
+    }
+  }
+
+  // If user selected "all" mode, use fallback (direct download)
+  if (mode === 'all') {
+    console.log(
+      `[Download] User selected download-all mode for ${frames.length} frames`
+    );
+    try {
       await downloadFramesAsZipFallback(
         frames,
         options.filename,
@@ -276,20 +376,11 @@ export async function downloadFramesSmartZip(
           });
         }
       );
+      return;
+    } catch (error) {
+      console.error('[Download] Download-all failed:', error);
+      options.onError?.(error instanceof Error ? error : new Error(String(error)));
+      throw error;
     }
-  } else {
-    console.log('[StreamingZip] Using standard download');
-    await downloadFramesAsZipFallback(
-      frames,
-      options.filename,
-      (progress) => {
-        options.onProgress?.({
-          ...progress,
-          bytesGenerated: 0,
-          currentBatch: 1,
-          totalBatches: 1,
-        });
-      }
-    );
   }
 }

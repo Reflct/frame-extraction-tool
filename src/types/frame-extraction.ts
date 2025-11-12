@@ -30,6 +30,7 @@ export interface ExtractPageState {
   error: string | null;
   showFrames: boolean;
   showClearCacheDialog: boolean;
+  showDownloadOptionsDialog?: boolean;
   timeRange: [number, number];
   imageFiles: FileList | null;
   isImageMode: boolean;
